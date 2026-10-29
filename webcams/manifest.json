@@ -1,0 +1,20 @@
+{
+  "zephyr": 1,
+  "id": "io.github.mccoy88f.live-webcams",
+  "version": "1.0.0",
+  "name": "Live Webcams",
+  "description": "Live webcams from around the world (skylinewebcams.com): beaches, cities, mountains, ports and more, as TV channels.",
+  "author": "mccoy88f",
+  "icon": "icon.png",
+  "main": "main.js",
+  "types": ["tv"],
+  "resources": ["catalog", "meta", "stream"],
+  "idPrefixes": ["sky:"],
+  "catalogs": [
+    { "type": "tv", "id": "top", "name": "Most watched", "extra": [{ "name": "skip" }] },
+    { "type": "tv", "id": "new", "name": "New", "extra": [{ "name": "skip" }] }
+  ],
+  "settings": true,
+  "updateUrl": "https://raw.githubusercontent.com/mccoy88f/Zephyr-TV-Extensions/main/webcams/manifest-zephyrtv.json",
+  "behaviorHints": { "adult": false, "configurationRequired": false }
+}

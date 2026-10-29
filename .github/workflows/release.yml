@@ -1,0 +1,67 @@
+# Publishes one extension: on a tag <folder>-v<version> (webcams-v1.0.0: version 1.0.0 of webcams/manifest.json), it
+# builds the package, makes the GitHub release with it, and writes <folder>/manifest-zephyrtv.json on main: the fixed
+# address Zephyr TV installs and updates the extension from
+# (https://raw.githubusercontent.com/<repo>/main/<folder>/manifest-zephyrtv.json).
+name: Release an extension
+
+on:
+  push:
+    tags: ['*-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Extension and version
+        id: ext
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          ext="${tag%-v*}"
+          want="${tag##*-v}"
+          [ -f "$ext/manifest.json" ] || { echo "::error::No $ext/manifest.json for tag $tag"; exit 1; }
+          version=$(node -p "require('./$ext/manifest.json').version")
+          # The tag must be the manifest's version: the release and what Zephyr TV reads in it must agree.
+          [ "$version" = "$want" ] || { echo "::error::Tag $tag is not $ext/manifest.json's version ($version)"; exit 1; }
+          echo "ext=$ext" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: sh build.sh ${{ steps.ext.outputs.ext }}
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ext=${{ steps.ext.outputs.ext }}
+          version=${{ steps.ext.outputs.version }}
+          name=$(node -p "require('./$ext/manifest.json').name")
+          notes="$name for Zephyr TV, version $version.
+
+          Zephyr TV: Settings → Extra features → Zephyr Extensions → Add an extension, with this address:
+          https://raw.githubusercontent.com/${{ github.repository }}/main/$ext/manifest-zephyrtv.json"
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" dist/$ext/*.zip --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" dist/$ext/*.zip --title "$name $version" --notes "$notes" --latest=false
+          fi
+
+      - name: Publish the manifest
+        run: |
+          ext=${{ steps.ext.outputs.ext }}
+          cp dist/$ext/manifest-zephyrtv.json $ext/manifest-zephyrtv.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add $ext/manifest-zephyrtv.json
+          git diff --cached --quiet || git commit -m "$ext ${{ steps.ext.outputs.version }}: manifest-zephyrtv.json"
+          git push origin HEAD:main

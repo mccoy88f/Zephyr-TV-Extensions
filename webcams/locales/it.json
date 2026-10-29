@@ -1,0 +1,8 @@
+{
+  "name": "Webcam dal vivo",
+  "description": "Webcam dal vivo da tutto il mondo (skylinewebcams.com): spiagge, città, montagne, porti e altro, come canali TV.",
+  "settings": {
+    "country": { "label": "Il tuo paese", "description": "La prima riga: le webcam di questo paese." },
+    "language": { "label": "Lingua dei nomi", "description": "La lingua in cui il sito chiama le webcam." }
+  }
+}
