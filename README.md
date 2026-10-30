@@ -14,9 +14,13 @@ phone) the extension's address below. Zephyr TV checks the address now and then 
 
 ## Origin of the code
 
-Every extension here is written from scratch for Zephyr TV. **Live Webcams** reads the public pages of
-skylinewebcams.com, and takes a webcam's stream as the site's own web player does. It contains no code, text or
-image from other add-ons or apps. Its icon is its own. The webcams and their pictures belong to their owners; the
+Every extension here is written from scratch for Zephyr TV.
+
+**Live Webcams** is inspired by the Kodi add-on **Skyline Webcams** (`plugin.video.skylinecctv`) by **Bugatsinho**
+([source](https://github.com/bugatsinho/bugatsinho.github.io/tree/master/plugin.video.skylinecctv)): the idea, and
+which pages of the site to read, come from it. The extension is written anew in JavaScript for Zephyr TV: it reads the
+public pages of skylinewebcams.com, and takes a webcam's stream as the site's own web player does. None of that
+add-on's code, texts or images are in it. Its icon is its own. The webcams and their pictures belong to their owners; the
 extension only lists and plays what the site shows to everyone.
 
 ## The repository

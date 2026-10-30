@@ -1,6 +1,9 @@
 // Live Webcams: the live webcams of skylinewebcams.com as TV channels, in rows: your country's, the most watched,
 // the newest, and one for each kind of place (beaches, cities, mountains…). Each plays the site's own public stream.
-// Written from scratch for Zephyr TV, from the site's public pages and its web player: no code from other add-ons.
+// Inspired by the Kodi add-on "Skyline Webcams" (plugin.video.skylinecctv) by Bugatsinho:
+// https://github.com/bugatsinho/bugatsinho.github.io/tree/master/plugin.video.skylinecctv
+// Written from scratch for Zephyr TV in JavaScript, from the site's public pages and its web player: none of that
+// add-on's code is in it.
 
 const SITE = "https://www.skylinewebcams.com";
 const STREAMS = "https://hd-auth.skylinewebcams.com/"; // where the site's player takes a webcam's stream from
