@@ -13,6 +13,7 @@
 
 ## Checklist
 
+- [ ] I publish it under GPL-3.0, the licence of this repository (ported code: its licence allows it).
 - [ ] Legal content only: the sources give it to everyone for free, or it's the user's own (no piracy, nothing that gets around a paywall, a login, DRM or a region lock).
 - [ ] 18+ content has `behaviorHints.adult: true`; otherwise it's `false`.
 - [ ] No tracking, ads or data sent anywhere but to the extension's sources; the code can be read.

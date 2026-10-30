@@ -14,9 +14,11 @@ aggiungere la tua, o una nuova versione di una esistente, apri una pull request.
    distribuiscono film, serie, sport o pay TV senza averne il diritto; niente modi per aggirare abbonamenti, login,
    DRM o blocchi per paese. Le pull request che non rispettano questa regola vengono chiuse.
 2. **I contenuti 18+** mettono `"behaviorHints": { "adult": true }`, così Zephyr TV li mostra solo con il 18+ sbloccato.
-3. **Codice tuo, o che puoi condividere.** Scrivilo da zero, o portalo da un add-on la cui licenza lo permette. Scrivi
-   nella pull request, e in un commento in cima a `main.js`, da cosa deriva (vedi
-   [Origin of the code](README.md#origin-of-the-code)). Indica anche la sua licenza (una open source, come GPL-3.0 o MIT; un file `LICENSE` nella cartella è gradito).
+3. **GPL-3.0, come Zephyr TV.** Tutto in questo repository è sotto la [GNU GPL v3](LICENSE), la licenza di
+   Zephyr TV: mandando qui un'estensione, la pubblichi sotto GPL-3.0. Scrivila da zero, o portala da un add-on la cui
+   licenza lo permette (GPL-3.0 o compatibile, come MIT, BSD, Apache-2.0 o LGPL). Scrivi nella pull request, e in un
+   commento in cima a `main.js`, da cosa deriva (vedi [Origin of the code](README.md#origin-of-the-code)). Vuoi
+   un'altra licenza? Pubblica l'estensione nel [tuo repository](#il-tuo-repository).
 4. **Nessun danno.** Niente tracciamento, pubblicità o mining, niente dati mandati altrove che alle fonti
    dell'estensione. Niente codice offuscato o minificato illeggibile: un bundle (esbuild) va bene se nella cartella
    ci sono anche i sorgenti.
@@ -62,6 +64,14 @@ Zephyr → Aggiungi un'estensione**, oppure mettila su un server web e scrivi il
 3. Una volta accettata, l'Action **Release an extension** la pubblica da sola: il pacchetto come release GitHub, il
    suo `manifest-zephyrtv.json` e, per un'estensione nuova, la sua voce in `repository-zephyrtv.json`. Ogni
    dispositivo la vede.
+
+## Il tuo repository
+
+Un'estensione con un'altra licenza, o che preferisci gestire da te, va in un tuo repository, con la licenza che
+scegli. Copia da qui `build.sh`, `check.js` e `.github/workflows/release.yml` (leggono da soli il nome del repository), metti un
+`repository-zephyrtv.json` nella sua radice e dai il suo indirizzo ai tuoi utenti: in **Estensioni Zephyr →
+Aggiungi un'estensione** aggiunge il tuo repository, con tutte le sue estensioni. Lì le regole sui contenuti sono
+una tua responsabilità.
 
 ## Portare un add-on
 

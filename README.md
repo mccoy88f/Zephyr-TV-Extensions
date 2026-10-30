@@ -55,6 +55,9 @@ Anyone can add an extension here with a pull request: once merged, it shows on e
 rules, what to send, and how to port a **Stremio** add-on, a **Nuvio** plugin, a **CloudStream** plugin or a
 **Kodi** add-on.
 
+Everything here is under GPL-3.0, as Zephyr TV: an extension under another licence goes in a repository of its
+author ([how](CONTRIBUTING.md#your-own-repository)).
+
 `node check.js` checks every extension as the pull requests' check does.
 
 ## Release
@@ -68,3 +71,8 @@ So, to release: raise `version` in the extension's `manifest.json`, and merge. A
 (`git tag webcams-v1.0.1 && git push origin webcams-v1.0.1`) releases that version too.
 
 To build one by hand: `sh build.sh webcams` (in `dist/webcams/`).
+
+## License
+
+[GNU General Public License v3.0](LICENSE), the licence of [Zephyr TV](https://github.com/mccoy88f/Zephyr_TV).
+Every extension in this repository is published under it.

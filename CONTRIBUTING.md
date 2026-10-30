@@ -14,9 +14,12 @@ version of one, open a pull request.
    without the right to; no ways around a paywall, a login, DRM or a region lock. Pull requests that don't follow
    this are closed.
 2. **18+ content** sets `"behaviorHints": { "adult": true }`, so that Zephyr TV shows it only while 18+ is unlocked.
-3. **Your own code, or code you may share.** Write it from scratch, or port it from an add-on whose licence lets you.
-   Say in the pull request, and in a comment at the top of `main.js`, what it comes from (see
-   [Origin of the code](README.md#origin-of-the-code)). Say its licence too (an open-source one, such as GPL-3.0 or MIT; a `LICENSE` file in the folder is welcome).
+3. **GPL-3.0, as Zephyr TV.** Everything in this repository is under the [GNU GPL v3](LICENSE), the licence of
+   Zephyr TV: by sending an extension here, you publish it under GPL-3.0. Write it from scratch, or port it from an
+   add-on whose licence allows that (GPL-3.0 or compatible with it, such as MIT, BSD, Apache-2.0 or LGPL). Say in the
+   pull request, and in a comment at the top of `main.js`, what it comes from (see
+   [Origin of the code](README.md#origin-of-the-code)). Want another licence? Publish the extension in
+   [your own repository](#your-own-repository) instead.
 4. **No harm.** No tracking, no ads, no mining, nothing sent anywhere but to the extension's own sources. No
    obfuscated or minified code that can't be read: a bundle (esbuild) is fine if its sources are in the folder too.
 5. **One extension, one folder**, with a lower-case name (`my-extension`), and one pull request for it.
@@ -60,6 +63,14 @@ Add an extension**, or put it on a web server and type its address.
 2. A maintainer reads the code and tries the extension. Changes may be asked for.
 3. Once merged, the **Release an extension** Action releases it by itself: the package as a GitHub release, its
    `manifest-zephyrtv.json`, and, for a new extension, its entry in `repository-zephyrtv.json`. Every device sees it.
+
+## Your own repository
+
+An extension under another licence, or that you'd rather keep yourself, goes in a repository of your own, with the
+licence you choose. Copy `build.sh`, `check.js` and `.github/workflows/release.yml` from here (they read the repository's name
+by themselves), put a `repository-zephyrtv.json` at its root, and give its address to your users: in **Zephyr
+Extensions → Add an extension**, it adds your repository, with all its extensions. The same rules on content still
+make sense there, but they are up to you.
 
 ## Porting an add-on
 
