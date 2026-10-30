@@ -62,6 +62,12 @@ jobs:
           cp dist/$ext/manifest-zephyrtv.json $ext/manifest-zephyrtv.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add $ext/manifest-zephyrtv.json
+          # A new extension joins the repository's list (repository-zephyrtv.json), Zephyr TV's own.
+          node -e '
+            const fs = require("fs"), ext = process.argv[1], file = "repository-zephyrtv.json";
+            const r = JSON.parse(fs.readFileSync(file, "utf8")), entry = ext + "/manifest-zephyrtv.json";
+            if (!r.extensions.includes(entry)) { r.extensions.push(entry); fs.writeFileSync(file, JSON.stringify(r, null, 2) + "\n"); }
+          ' "$ext"
+          git add $ext/manifest-zephyrtv.json repository-zephyrtv.json
           git diff --cached --quiet || git commit -m "$ext ${{ steps.ext.outputs.version }}: manifest-zephyrtv.json"
           git push origin HEAD:main

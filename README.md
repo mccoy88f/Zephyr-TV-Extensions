@@ -12,6 +12,18 @@ phone) the extension's address below. Zephyr TV checks the address now and then 
 |---|---|---|
 | **Live Webcams** | Live webcams from around the world ([skylinewebcams.com](https://www.skylinewebcams.com)): your country's, the most watched, the newest, beaches, cities, mountains, ski slopes, lakes, ports, UNESCO heritage, volcanoes, animals. They play as TV channels: CH+ and CH− go through the row. | `https://raw.githubusercontent.com/mccoy88f/Zephyr-TV-Extensions/main/webcams/manifest-zephyrtv.json` |
 
+## The repository
+
+`repository-zephyrtv.json`, at the root, lists every extension of this repository (and OMG Premium TV). Zephyr TV
+has it from the start: its extensions show in **Zephyr Extensions**, each installed with OK. Another TV can add it
+with its address:
+
+```
+https://raw.githubusercontent.com/mccoy88f/Zephyr-TV-Extensions/main/repository-zephyrtv.json
+```
+
+The release Action adds a new extension to it by itself.
+
 ## Layout
 
 Each extension has a folder of its own, with what its package holds:
