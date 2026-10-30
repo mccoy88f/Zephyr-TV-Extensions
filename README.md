@@ -1,6 +1,6 @@
 # Zephyr TV Extensions
 
-Extensions for [Zephyr TV](https://github.com/mccoy88f/Zephyr_TV), the Android TV launcher. They follow the
+Extensions for [Zephyr TV](https://github.com/mccoy88f/Zephyr_TV), the launcher that turns any Android device (TV, stick, box, phone or tablet) into a smart TV. **Send yours:** see [Add your extension](#add-your-extension). They follow the
 [Zephyr TV extension standard](https://github.com/mccoy88f/Zephyr_TV/blob/main/docs/extensions.md).
 
 ## Install
@@ -33,7 +33,7 @@ with its address:
 https://raw.githubusercontent.com/mccoy88f/Zephyr-TV-Extensions/main/repository-zephyrtv.json
 ```
 
-The release Action adds a new extension to it by itself.
+The release Action adds a new extension to it by itself, when it's merged.
 
 ## Layout
 
@@ -48,13 +48,23 @@ webcams/
 └── manifest-zephyrtv.json   written by the release Action: the address Zephyr TV installs from
 ```
 
+## Add your extension
+
+Anyone can add an extension here with a pull request: once merged, it shows on every device that runs Zephyr TV.
+**Legal content only**: no piracy. [CONTRIBUTING.md](CONTRIBUTING.md) ([italiano](CONTRIBUTING.it.md)) has the
+rules, what to send, and how to port a **Stremio** add-on, a **Nuvio** plugin, a **CloudStream** plugin or a
+**Kodi** add-on.
+
+`node check.js` checks every extension as the pull requests' check does.
+
 ## Release
 
-1. Raise `version` in the extension's `manifest.json`, and commit.
-2. Push a tag `<folder>-v<version>`, for example `git tag webcams-v1.0.1 && git push origin webcams-v1.0.1`.
+A merge to `main` releases by itself each extension whose `version` has no release yet: the **Release an extension**
+Action builds the package, publishes it as the GitHub release of the tag `<folder>-v<version>`, and writes the
+extension's `manifest-zephyrtv.json` on `main`, with the package's address and SHA-256 (and, for a new extension, its
+entry in `repository-zephyrtv.json`). Zephyr TV then sees the new version at the same address.
 
-The **Release an extension** Action builds the package, publishes it as the tag's GitHub release, and writes the
-extension's `manifest-zephyrtv.json` on `main`, with the package's address and SHA-256. Zephyr TV then sees the new
-version at the same address.
+So, to release: raise `version` in the extension's `manifest.json`, and merge. A tag pushed by hand
+(`git tag webcams-v1.0.1 && git push origin webcams-v1.0.1`) releases that version too.
 
 To build one by hand: `sh build.sh webcams` (in `dist/webcams/`).

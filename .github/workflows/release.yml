@@ -1,15 +1,23 @@
-# Publishes one extension: on a tag <folder>-v<version> (webcams-v1.0.0: version 1.0.0 of webcams/manifest.json), it
-# builds the package, makes the GitHub release with it, and writes <folder>/manifest-zephyrtv.json on main: the fixed
-# address Zephyr TV installs and updates the extension from
-# (https://raw.githubusercontent.com/<repo>/main/<folder>/manifest-zephyrtv.json).
+# Publishes the extensions. On main, each extension whose version has no release yet (a new extension, or a higher
+# version merged from a pull request) is released by itself; a tag <folder>-v<version> pushed by hand
+# (webcams-v1.0.0: version 1.0.0 of webcams/manifest.json) releases that one. For each, it builds the package, makes
+# the GitHub release with it, and writes <folder>/manifest-zephyrtv.json on main: the fixed address Zephyr TV installs
+# and updates the extension from (https://raw.githubusercontent.com/<repo>/main/<folder>/manifest-zephyrtv.json).
+# A new extension joins repository-zephyrtv.json, the repository Zephyr TV has from the start.
 name: Release an extension
 
 on:
   push:
+    branches: [main]
     tags: ['*-v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -23,51 +31,62 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Extension and version
-        id: ext
+      - name: What to release
+        id: what
         run: |
-          tag="${GITHUB_REF_NAME}"
-          ext="${tag%-v*}"
-          want="${tag##*-v}"
-          [ -f "$ext/manifest.json" ] || { echo "::error::No $ext/manifest.json for tag $tag"; exit 1; }
-          version=$(node -p "require('./$ext/manifest.json').version")
-          # The tag must be the manifest's version: the release and what Zephyr TV reads in it must agree.
-          [ "$version" = "$want" ] || { echo "::error::Tag $tag is not $ext/manifest.json's version ($version)"; exit 1; }
-          echo "ext=$ext" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          list=""
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tag="${GITHUB_REF_NAME}"
+            ext="${tag%-v*}"
+            want="${tag##*-v}"
+            [ -f "$ext/manifest.json" ] || { echo "::error::No $ext/manifest.json for tag $tag"; exit 1; }
+            version=$(node -p "require('./$ext/manifest.json').version")
+            # The tag must be the manifest's version: the release and what Zephyr TV reads in it must agree.
+            [ "$version" = "$want" ] || { echo "::error::Tag $tag is not $ext/manifest.json's version ($version)"; exit 1; }
+            list="$ext"
+          else
+            node check.js
+            for m in */manifest.json; do
+              ext=$(dirname "$m")
+              version=$(node -p "require('./$ext/manifest.json').version")
+              # Released already: its tag is there (and its manifest-zephyrtv.json says this version).
+              if git ls-remote --exit-code --tags origin "refs/tags/$ext-v$version" >/dev/null; then
+                [ "$(node -p "try { require('./$ext/manifest-zephyrtv.json').version } catch (e) { '' }")" = "$version" ] && continue
+              fi
+              list="$list $ext"
+            done
+          fi
+          echo "Extensions to release:${list:- none}"
+          echo "list=$list" >> "$GITHUB_OUTPUT"
 
-      - name: Build
-        run: sh build.sh ${{ steps.ext.outputs.ext }}
-
-      - name: Release
+      - name: Build, release, publish the manifest
+        if: steps.what.outputs.list != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ext=${{ steps.ext.outputs.ext }}
-          version=${{ steps.ext.outputs.version }}
-          name=$(node -p "require('./$ext/manifest.json').name")
-          notes="$name for Zephyr TV, version $version.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for ext in ${{ steps.what.outputs.list }}; do
+            sh build.sh "$ext"
+            version=$(node -p "require('./$ext/manifest.json').version")
+            name=$(node -p "require('./$ext/manifest.json').name")
+            tag="$ext-v$version"
+            notes="$name for Zephyr TV, version $version.
 
           Zephyr TV: Settings → Extra features → Zephyr Extensions → Add an extension, with this address:
           https://raw.githubusercontent.com/${{ github.repository }}/main/$ext/manifest-zephyrtv.json"
-          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release upload "${GITHUB_REF_NAME}" dist/$ext/*.zip --clobber
-          else
-            gh release create "${GITHUB_REF_NAME}" dist/$ext/*.zip --title "$name $version" --notes "$notes" --latest=false
-          fi
-
-      - name: Publish the manifest
-        run: |
-          ext=${{ steps.ext.outputs.ext }}
-          cp dist/$ext/manifest-zephyrtv.json $ext/manifest-zephyrtv.json
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # A new extension joins the repository's list (repository-zephyrtv.json), Zephyr TV's own.
-          node -e '
-            const fs = require("fs"), ext = process.argv[1], file = "repository-zephyrtv.json";
-            const r = JSON.parse(fs.readFileSync(file, "utf8")), entry = ext + "/manifest-zephyrtv.json";
-            if (!r.extensions.includes(entry)) { r.extensions.push(entry); fs.writeFileSync(file, JSON.stringify(r, null, 2) + "\n"); }
-          ' "$ext"
-          git add $ext/manifest-zephyrtv.json repository-zephyrtv.json
-          git diff --cached --quiet || git commit -m "$ext ${{ steps.ext.outputs.version }}: manifest-zephyrtv.json"
+            if gh release view "$tag" >/dev/null 2>&1; then
+              gh release upload "$tag" dist/$ext/*.zip --clobber
+            else
+              gh release create "$tag" dist/$ext/*.zip --target main --title "$name $version" --notes "$notes" --latest=false
+            fi
+            cp dist/$ext/manifest-zephyrtv.json $ext/manifest-zephyrtv.json
+            node -e '
+              const fs = require("fs"), ext = process.argv[1], file = "repository-zephyrtv.json";
+              const r = JSON.parse(fs.readFileSync(file, "utf8")), entry = ext + "/manifest-zephyrtv.json";
+              if (!r.extensions.includes(entry)) { r.extensions.push(entry); fs.writeFileSync(file, JSON.stringify(r, null, 2) + "\n"); }
+            ' "$ext"
+            git add $ext/manifest-zephyrtv.json repository-zephyrtv.json
+            git diff --cached --quiet || git commit -m "$ext $version: manifest-zephyrtv.json"
+          done
           git push origin HEAD:main

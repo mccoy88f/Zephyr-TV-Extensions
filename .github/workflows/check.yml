@@ -1,0 +1,35 @@
+# Checks every pull request, and main: each extension's manifest and code (node check.js), that a changed extension
+# has a higher version, and that each one builds (build.sh).
+name: Check the extensions
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            node check.js "origin/${{ github.base_ref }}"
+          else
+            node check.js
+          fi
+
+      - name: Build
+        run: |
+          for m in */manifest.json; do sh build.sh "$(dirname "$m")"; done
