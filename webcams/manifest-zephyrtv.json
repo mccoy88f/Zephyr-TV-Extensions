@@ -1,11 +1,11 @@
 {
   "zephyr": 1,
   "id": "io.github.mccoy88f.live-webcams",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "name": "Live Webcams",
   "description": "Live webcams from around the world (skylinewebcams.com): beaches, cities, mountains, ports and more, as TV channels.",
   "author": "mccoy88f",
   "icon": "https://raw.githubusercontent.com/mccoy88f/Zephyr-TV-Extensions/main/webcams/icon.png",
-  "package": "https://github.com/mccoy88f/Zephyr-TV-Extensions/releases/download/webcams-v1.0.0/webcams-1.0.0.zip",
-  "sha256": "f734c43c866b1192f6ada90cfda6f4d3a392f162d58caa7c12f57a6e8aa8c28b"
+  "package": "https://github.com/mccoy88f/Zephyr-TV-Extensions/releases/download/webcams-v1.0.1/webcams-1.0.1.zip",
+  "sha256": "0dcfdb21d893bc20fc4900e647fa1f5ee5044e79cbe8796a2aed1a60b5c35f8b"
 }
