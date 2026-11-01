@@ -6,7 +6,8 @@
   "description": "Search and play YouTube in Zephyr TV. Not affiliated with, endorsed by, or connected to YouTube or Google. YouTube is a trademark of Google LLC. Uses youtubei.js (https://www.npmjs.com/package/youtubei.js), downloaded at install.",
   "author": "mccoy88f",
   "package": "https://github.com/mccoy88f/Zephyr-TV-Extensions/releases/download/youyubez-v1.0.1/youyubez-1.0.1.zip",
-  "sha256": "5326cdeddd3228d9d1120744a233c8375b30eebb7ea06e81635894cac979f45e",
+  "sha256": "909cbf9ee45f626ccbc1a1220008638f901d53b13698263a3f2329fea1d3d1ee",
+  "icon": "https://raw.githubusercontent.com/mccoy88f/Zephyr-TV-Extensions/main/youyubez/icon.png",
   "libraries": [
     {
       "name": "youtubei.js",
