@@ -1,7 +1,7 @@
 {
   "zephyr": 1,
   "id": "io.github.mccoy88f.live-webcams",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "name": "Live Webcams",
   "description": "Live webcams from around the world (skylinewebcams.com): beaches, cities, mountains, ports and more, as TV channels.",
   "author": "mccoy88f",

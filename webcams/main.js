@@ -8,7 +8,6 @@
 const SITE = "https://www.skylinewebcams.com";
 const STREAMS = "https://hd-auth.skylinewebcams.com/"; // where the site's player takes a webcam's stream from
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
-const PAGE = 100;
 const LANGUAGES = ["en", "it", "de", "es", "fr", "pl", "el", "hr", "sl"]; // the site's languages
 
 // The site's countries (their pages' names), and the TV's country's.
@@ -130,8 +129,11 @@ module.exports = {
   async catalog(a) {
     const path = pathOf(a.id, language(a.settings));
     if (!path) return { metas: [] };
+    // The site lists a catalog on one page. A later page would download that page again, and after a few
+    // catalogs the site answers 503: the rows after the first one never arrive. Answer the whole list once.
     const skip = Number((a.extra && a.extra.skip) || 0);
-    return { metas: cams(await page(path)).slice(skip, skip + PAGE), cacheMaxAge: 6 * 3600 };
+    if (skip > 0) return { metas: [], cacheMaxAge: 6 * 3600 };
+    return { metas: cams(await page(path)), cacheMaxAge: 6 * 3600 };
   },
 
   async meta(a) {
