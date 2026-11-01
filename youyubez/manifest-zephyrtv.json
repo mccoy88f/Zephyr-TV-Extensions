@@ -1,12 +1,12 @@
 {
   "zephyr": 1,
   "id": "org.zephyr.youyubez",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "name": "YouYubeZ",
   "description": "Search and play YouTube in Zephyr TV. Not affiliated with, endorsed by, or connected to YouTube or Google. YouTube is a trademark of Google LLC. Uses youtubei.js (https://www.npmjs.com/package/youtubei.js), downloaded at install.",
   "author": "mccoy88f",
-  "package": "https://github.com/mccoy88f/Zephyr-TV-Extensions/releases/download/youyubez-v1.0.1/youyubez-1.0.1.zip",
-  "sha256": "909cbf9ee45f626ccbc1a1220008638f901d53b13698263a3f2329fea1d3d1ee",
+  "package": "https://github.com/mccoy88f/Zephyr-TV-Extensions/releases/download/youyubez-v1.0.2/youyubez-1.0.2.zip",
+  "sha256": "aeb24d3dd49ae8b67f80d8d69522039365d245a8cfdbca35454331fff3e9776f",
   "icon": "https://raw.githubusercontent.com/mccoy88f/Zephyr-TV-Extensions/main/youyubez/icon.png",
   "libraries": [
     {
