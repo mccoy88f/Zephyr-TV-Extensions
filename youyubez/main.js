@@ -99,7 +99,10 @@ function withCredits(m, channel, published, description, runtime) {
   if (description) m.description = description;
   if (published) m.releaseInfo = dateOf(published);
   if (runtime) m.runtime = runtime;
-  if (channel) m.genres = [channel];
+  if (channel) {
+    m.director = [channel];
+    m.genres = [channel];
+  }
   return m;
 }
 
@@ -306,7 +309,6 @@ async function innertube(path, body, cookies, extra) {
     body: JSON.stringify(body),
   });
   const text = await res.text();
-  if (!res.ok) return {};
   try { return JSON.parse(text); } catch (e) { return {}; }
 }
 
@@ -344,11 +346,7 @@ function playerContext() {
 }
 
 function playerHeaders() {
-  return {
-    "User-Agent": VR_UA,
-    "X-YouTube-Client-Name": "28",
-    "X-YouTube-Client-Version": VR_VER,
-  };
+  return { "User-Agent": VR_UA };
 }
 
 function playHeaders() {
@@ -377,19 +375,76 @@ function zephyrStream(title, url, L) {
   return { name: L.zephyr, title: title, url: url, behaviorHints: playHeaders() };
 }
 
+function addFormat(out, f, L, progressive) {
+  if (!f || !f.url) return;
+  if (!progressive && !muxed(f)) return;
+  const mime = String(f.mimeType || f.mime_type || "").split(";")[0];
+  if (progressive && mime.indexOf("audio/") === 0) return;
+  const q = f.qualityLabel || f.quality_label || f.quality || L.playZephyr;
+  out.push(zephyrStream((q + (mime ? " " + mime : "")).trim(), f.url, L));
+}
+
 function zephyrStreams(data, L) {
   const sd = (data && (data.streamingData || data.streaming_data)) || {};
   const out = [];
   if (sd.hlsManifestUrl) out.push(zephyrStream("HLS", sd.hlsManifestUrl, L));
   if (sd.dashManifestUrl) out.push(zephyrStream("DASH", sd.dashManifestUrl, L));
-  const all = (sd.formats || []).concat(sd.adaptiveFormats || sd.adaptive_formats || []);
-  all.forEach(function (f) {
-    if (!muxed(f)) return;
-    const mime = String(f.mimeType || f.mime_type || "").split(";")[0];
-    const q = f.qualityLabel || f.quality_label || f.quality || L.playZephyr;
-    out.push(zephyrStream((q + (mime ? " " + mime : "")).trim(), f.url, L));
-  });
+  (sd.formats || []).forEach(function (f) { addFormat(out, f, L, true); });
+  (sd.adaptiveFormats || sd.adaptive_formats || []).forEach(function (f) { addFormat(out, f, L, false); });
   return out;
+}
+
+function parsePlayerHtml(html) {
+  const key = "ytInitialPlayerResponse";
+  const at = html.indexOf(key);
+  if (at < 0) return {};
+  const eq = html.indexOf("{", at);
+  if (eq < 0) return {};
+  let i = eq, depth = 0, inStr = false, esc = false;
+  for (; i < html.length; i++) {
+    const c = html.charAt(i);
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === "\"") inStr = false;
+      continue;
+    }
+    if (c === "\"") inStr = true;
+    else if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0) {
+        try { return JSON.parse(html.slice(eq, i + 1)); } catch (e) { return {}; }
+      }
+    }
+  }
+  return {};
+}
+
+async function fromWatchPage(vid, cookies) {
+  const headers = { "Accept-Language": "en" };
+  if (cookies) headers.Cookie = cookies;
+  const res = await fetch("https://www.youtube.com/watch?v=" + encodeURIComponent(vid) + "&bpctr=9999999999&has_verified=1", { headers: headers });
+  const html = await res.text();
+  return parsePlayerHtml(html);
+}
+
+function dummyL() { return { zephyr: "x", playZephyr: "x" }; }
+
+async function playerData(vid, cookies) {
+  const body = { context: playerContext(), videoId: vid, contentCheckOk: true, racyCheckOk: true };
+  const tries = ["", cookies || ""];
+  let best = {};
+  for (let i = 0; i < tries.length; i++) {
+    if (i && !tries[i]) continue;
+    const data = await innertube("player", body, tries[i], playerHeaders());
+    if (zephyrStreams(data, dummyL()).length) return data;
+    if (data && data.videoDetails && !best.videoDetails) best = data;
+  }
+  const page = await fromWatchPage(vid, cookies);
+  if (zephyrStreams(page, dummyL()).length) return page;
+  if (page && page.videoDetails) return page;
+  return best;
 }
 
 function catalogs(settings) {
@@ -468,9 +523,7 @@ module.exports = {
     const base = { id: PREFIX + vid, type: "video", name: vid, poster: posterOf(vid), posterShape: "landscape" };
     let d = { name: "", poster: "", description: "", channel: "", date: "", runtime: "" };
     try {
-      d = mergeDetails(d, fromPlayer(await innertube("player", {
-        context: playerContext(), videoId: vid, contentCheckOk: true, racyCheckOk: true,
-      }, cookies, playerHeaders())));
+      d = mergeDetails(d, fromPlayer(await playerData(vid, cookies)));
       if (incomplete(d)) d = mergeDetails(d, fromNext(await innertube("next", { context: context(), videoId: vid }, cookies)));
       if (incomplete(d)) {
         const res = await fetch("https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + vid));
@@ -490,15 +543,10 @@ module.exports = {
     const play = (settings && settings.play) || "both";
     const L = t();
     const streams = [];
-    if (play === "youtube" || play === "both") {
-      streams.push({ name: L.youtube, title: L.playYoutube, ytId: vid });
-    }
     if (play === "zephyr" || play === "both") {
       try {
-        const data = await innertube("player", {
-          context: playerContext(), videoId: vid, contentCheckOk: true, racyCheckOk: true,
-        }, cookieHeader(settings && settings.cookies), playerHeaders());
-        zephyrStreams(data, L).forEach(function (s) { streams.push(s); });
+        zephyrStreams(await playerData(vid, cookieHeader(settings && settings.cookies)), L)
+          .forEach(function (s) { streams.push(s); });
       } catch (e) { /* player refused the video */ }
       try {
         const lib = require("youtubei.js");
@@ -516,6 +564,9 @@ module.exports = {
           streams.push(zephyrStream((f.quality_label || f.quality || L.playZephyr) + mime, f.url, L));
         });
       } catch (e) { /* library missing, or QuickJS cannot run the full client */ }
+    }
+    if (play === "youtube" || play === "both") {
+      streams.push({ name: L.youtube, title: L.playYoutube, ytId: vid });
     }
     return { streams: streams };
   },
