@@ -438,15 +438,51 @@ function muxed(f) {
   return hasAudio && hasVideo;
 }
 
-function zephyrStream(title, url, L) {
-  return { name: L.zephyr, title: title, url: url, behaviorHints: playHeaders() };
+function zephyrStream(title, url, L, extra) {
+  const hints = playHeaders();
+  if (extra) {
+    const keys = Object.keys(extra);
+    for (let i = 0; i < keys.length; i++) hints[keys[i]] = extra[keys[i]];
+  }
+  return { name: L.zephyr, title: title, url: url, behaviorHints: hints };
 }
 
-function addFormat(out, f, L, progressive) {
+function mimeOf(f) {
+  return String(f.mimeType || f.mime_type || "");
+}
+
+function isAudioOnly(f) {
+  return !!f && !!f.url && mimeOf(f).indexOf("audio/") === 0;
+}
+
+function isVideoOnly(f) {
+  if (!f || !f.url || isAudioOnly(f)) return false;
+  const m = mimeOf(f);
+  const video = m.indexOf("video/") === 0 || !!(f.qualityLabel || f.quality_label || f.width || f.height);
+  return video && !muxed(f);
+}
+
+/** Best AAC, else the loudest audio-only track: yt-dlp / youtubei.js pair this with a video-only itag. */
+function bestAudio(list) {
+  const aac = [];
+  const other = [];
+  for (let i = 0; i < list.length; i++) {
+    const f = list[i];
+    if (!isAudioOnly(f)) continue;
+    if (mimeOf(f).indexOf("mp4") >= 0) aac.push(f);
+    else other.push(f);
+  }
+  function louder(a, b) { return (b.bitrate || 0) - (a.bitrate || 0); }
+  aac.sort(louder);
+  other.sort(louder);
+  return aac[0] || other[0] || null;
+}
+
+function addMuxed(out, f, L) {
   if (!f || !f.url) return;
-  if (!progressive && !muxed(f)) return;
-  const mime = String(f.mimeType || f.mime_type || "").split(";")[0];
-  if (progressive && mime.indexOf("audio/") === 0) return;
+  const mime = mimeOf(f).split(";")[0];
+  if (mime.indexOf("audio/") === 0) return;
+  if (!muxed(f) && mime.indexOf("video/") === 0) return;
   const q = f.qualityLabel || f.quality_label || f.quality || L.playZephyr;
   out.push(zephyrStream((q + (mime ? " " + mime : "")).trim(), f.url, L));
 }
@@ -456,8 +492,34 @@ function zephyrStreams(data, L) {
   const out = [];
   if (sd.hlsManifestUrl) out.push(zephyrStream("HLS", sd.hlsManifestUrl, L));
   if (sd.dashManifestUrl) out.push(zephyrStream("DASH", sd.dashManifestUrl, L));
-  (sd.formats || []).forEach(function (f) { addFormat(out, f, L, true); });
-  (sd.adaptiveFormats || sd.adaptive_formats || []).forEach(function (f) { addFormat(out, f, L, false); });
+  const all = (sd.formats || []).concat(sd.adaptiveFormats || sd.adaptive_formats || []);
+  const audio = bestAudio(all);
+  const byH = {};
+  for (let i = 0; i < all.length; i++) {
+    const f = all[i];
+    if (!isVideoOnly(f)) continue;
+    const m = mimeOf(f);
+    const mp4 = m.indexOf("mp4") >= 0;
+    if (!mp4 && m.indexOf("webm") < 0) continue;
+    const h = f.height || 0;
+    if (h < 240) continue;
+    const cur = byH[h];
+    if (!cur) { byH[h] = f; continue; }
+    const curMp4 = mimeOf(cur).indexOf("mp4") >= 0;
+    if (mp4 && !curMp4) { byH[h] = f; continue; }
+    if (mp4 === curMp4 && (f.bitrate || 0) > (cur.bitrate || 0)) byH[h] = f;
+  }
+  const heights = Object.keys(byH).map(Number).sort(function (a, b) { return b - a; });
+  if (audio && heights.length) {
+    for (let i = 0; i < heights.length; i++) {
+      const f = byH[heights[i]];
+      const q = f.qualityLabel || f.quality_label || (heights[i] + "p");
+      out.push(zephyrStream(q, f.url, L, { audioUrl: audio.url }));
+    }
+  } else {
+    (sd.formats || []).forEach(function (f) { addMuxed(out, f, L); });
+    (sd.adaptiveFormats || sd.adaptive_formats || []).forEach(function (f) { if (muxed(f)) addMuxed(out, f, L); });
+  }
   return out;
 }
 
