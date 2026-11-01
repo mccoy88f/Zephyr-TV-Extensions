@@ -3,6 +3,7 @@
   "name": "Zephyr TV",
   "extensions": [
     "https://github.com/mccoy88f/OMG-Premium-TV/releases/latest/download/manifest-zephyrtv.json",
-    "webcams/manifest-zephyrtv.json"
+    "webcams/manifest-zephyrtv.json",
+    "youyubez/manifest-zephyrtv.json"
   ]
 }

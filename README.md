@@ -11,6 +11,7 @@ phone) the extension's address below. Zephyr TV checks the address now and then 
 | Extension | What it gives | Address |
 |---|---|---|
 | **Live Webcams** | Live webcams from around the world ([skylinewebcams.com](https://www.skylinewebcams.com)): your country's, the most watched, the newest, beaches, cities, mountains, ski slopes, lakes, ports, UNESCO heritage, volcanoes, animals. They play as TV channels: CH+ and CH− go through the row. | `https://raw.githubusercontent.com/mccoy88f/Zephyr-TV-Extensions/main/webcams/manifest-zephyrtv.json` |
+| **YouYubeZ** | YouTube search and playlists in Zephyr TV. **Not affiliated with YouTube or Google.** Uses [youtubei.js](https://www.npmjs.com/package/youtubei.js), downloaded at install. Play in the YouTube app, in Zephyr TV, or both. | `https://raw.githubusercontent.com/mccoy88f/Zephyr-TV-Extensions/main/youyubez/manifest-zephyrtv.json` |
 
 ## Origin of the code
 

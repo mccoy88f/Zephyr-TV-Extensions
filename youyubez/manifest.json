@@ -1,0 +1,28 @@
+{
+  "zephyr": 1,
+  "id": "org.zephyr.youyubez",
+  "version": "1.0.0",
+  "name": "YouYubeZ",
+  "description": "Search and play YouTube in Zephyr TV. Not affiliated with, endorsed by, or connected to YouTube or Google. YouTube is a trademark of Google LLC. Uses youtubei.js (https://www.npmjs.com/package/youtubei.js), downloaded at install.",
+  "author": "mccoy88f",
+  "main": "main.js",
+  "types": ["channel", "video"],
+  "resources": ["catalog", "meta", "stream"],
+  "idPrefixes": ["ytz:"],
+  "catalogs": [
+    { "type": "video", "id": "search", "name": "Search", "extra": [{ "name": "search", "isRequired": true }, { "name": "skip" }] }
+  ],
+  "settings": true,
+  "collectors": ["videos"],
+  "requires": ["libraries"],
+  "updateUrl": "https://raw.githubusercontent.com/mccoy88f/Zephyr-TV-Extensions/main/youyubez/manifest-zephyrtv.json",
+  "behaviorHints": { "adult": false, "configurationRequired": false },
+  "libraries": [
+    {
+      "name": "youtubei.js",
+      "version": "0.0.1-stub",
+      "url": "youtubei.js",
+      "sha256": "a303b77a23c8bc2fd29caa77f34594589b267f5aadd729bcf8cf4748e7093f94"
+    }
+  ]
+}
