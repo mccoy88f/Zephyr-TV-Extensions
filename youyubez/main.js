@@ -65,18 +65,164 @@ function posterOf(id, thumbs) {
   return "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg";
 }
 
+function channelOf(v) {
+  if (!v) return "";
+  if (typeof v.author === "string" && v.author) return v.author;
+  if (typeof v.ownerChannelName === "string" && v.ownerChannelName) return v.ownerChannelName;
+  if (typeof v.author_name === "string" && v.author_name) return v.author_name;
+  return textOf(v.ownerText) || textOf(v.shortBylineText) || textOf(v.longBylineText) ||
+    (v.owner && v.owner.videoOwnerRenderer ? textOf(v.owner.videoOwnerRenderer.title) : "") ||
+    (v.videoOwnerRenderer ? textOf(v.videoOwnerRenderer.title) : "");
+}
+
+function dateOf(v) {
+  if (v == null || v === "") return "";
+  if (typeof v === "object") return dateOf(textOf(v));
+  const s = String(v).trim();
+  const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return iso ? iso[1] : s;
+}
+
+function seconds(n) {
+  n = parseInt(n, 10);
+  if (!(n >= 0)) return "";
+  const h = Math.floor(n / 3600);
+  const m = Math.floor((n % 3600) / 60);
+  const s = n % 60;
+  function pad(x) { return (x < 10 ? "0" : "") + x; }
+  return h ? h + ":" + pad(m) + ":" + pad(s) : m + ":" + pad(s);
+}
+
+function withCredits(m, channel, published, description, runtime) {
+  if (description) m.description = description;
+  if (published) m.releaseInfo = dateOf(published);
+  if (runtime) m.runtime = runtime;
+  if (channel) {
+    m.director = [channel];
+    m.genres = [channel];
+  }
+  return m;
+}
+
 function metaOf(v) {
   if (!v) return null;
   const id = v.videoId || v.video_id || (v.navigationEndpoint && v.navigationEndpoint.watchEndpoint && v.navigationEndpoint.watchEndpoint.videoId);
   if (!id || !/^[a-zA-Z0-9_-]{11}$/.test(id)) return null;
-  return {
+  return withCredits({
     id: PREFIX + id,
     type: "video",
     name: textOf(v.title) || id,
     poster: posterOf(id, v.thumbnail && v.thumbnail.thumbnails),
     posterShape: "landscape",
-    description: textOf(v.descriptionSnippet || v.description),
+  }, channelOf(v), dateOf(v.publishedTimeText) || dateOf(v.publishDate), textOf(v.descriptionSnippet || v.description), textOf(v.lengthText));
+}
+
+function lockupMeta(lock) {
+  const id = lock.contentId;
+  let title = "";
+  let channel = "";
+  let published = "";
+  try { title = lock.metadata.lockupMetadataViewModel.title.content; } catch (e) { /* no title in this lockup */ }
+  try {
+    const rows = lock.metadata.lockupMetadataViewModel.metadata.contentMetadataViewModel.metadataRows;
+    const parts = [];
+    for (let i = 0; i < rows.length; i++) {
+      const mp = rows[i].metadataParts || [];
+      for (let j = 0; j < mp.length; j++) {
+        const c = (mp[j].text && mp[j].text.content) || "";
+        if (c) parts.push(c);
+      }
+    }
+    if (parts.length) channel = parts[0];
+    for (let i = 0; i < parts.length; i++) {
+      if (parts[i] !== channel && (/\bago\b|\d{4}|Streamed|Premiered|\d{1,2}\/\d{1,2}/i.test(parts[i]))) {
+        published = parts[i];
+        break;
+      }
+    }
+  } catch (e) { /* lockup without metadata rows */ }
+  return withCredits({
+    id: PREFIX + id, type: "video", name: title || id, poster: posterOf(id), posterShape: "landscape",
+  }, channel, published, "");
+}
+
+function mergeDetails(a, b) {
+  return {
+    name: (a && a.name) || (b && b.name) || "",
+    poster: (a && a.poster) || (b && b.poster) || "",
+    description: (a && a.description) || (b && b.description) || "",
+    channel: (a && a.channel) || (b && b.channel) || "",
+    date: (a && a.date) || (b && b.date) || "",
+    runtime: (a && a.runtime) || (b && b.runtime) || "",
   };
+}
+
+function fromPlayer(data) {
+  const d = (data && data.videoDetails) || {};
+  const m = (data && data.microformat && data.microformat.playerMicroformatRenderer) || {};
+  const thumbs = (d.thumbnail && d.thumbnail.thumbnails) || (m.thumbnail && m.thumbnail.thumbnails);
+  return {
+    name: d.title || textOf(m.title) || "",
+    poster: thumbs && thumbs.length ? posterOf(d.videoId || "", thumbs) : "",
+    description: textOf(m.description) || d.shortDescription || "",
+    channel: m.ownerChannelName || d.author || "",
+    date: dateOf(m.publishDate || m.uploadDate),
+    runtime: seconds(d.lengthSeconds || m.lengthSeconds),
+  };
+}
+
+function fromNext(data) {
+  const out = { name: "", description: "", channel: "", date: "", poster: "", runtime: "" };
+  function walk(node, depth) {
+    if (!node || depth > 24) return;
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length; i++) walk(node[i], depth + 1);
+      return;
+    }
+    if (typeof node !== "object") return;
+    if (node.videoPrimaryInfoRenderer) {
+      const p = node.videoPrimaryInfoRenderer;
+      if (!out.name) out.name = textOf(p.title);
+      if (!out.date) out.date = dateOf(p.dateText) || dateOf(p.relativeDateText);
+    }
+    if (node.videoSecondaryInfoRenderer) {
+      const s = node.videoSecondaryInfoRenderer;
+      if (!out.channel) out.channel = channelOf(s);
+      const body = s.expandableVideoDescriptionBodyRenderer;
+      const desc = textOf(s.attributedDescription) || textOf(s.description) ||
+        (body ? (textOf(body.attributedDescriptionBodyText) || textOf(body.descriptionBodyText)) : "");
+      if (desc && !out.description) out.description = desc;
+    }
+    if (node.videoOwnerRenderer && !out.channel) out.channel = textOf(node.videoOwnerRenderer.title);
+    if (node.expandableVideoDescriptionBodyRenderer && !out.description) {
+      const e = node.expandableVideoDescriptionBodyRenderer;
+      out.description = textOf(e.attributedDescriptionBodyText) || textOf(e.descriptionBodyText) || textOf(e.attributedDescription);
+    }
+    const keys = Object.keys(node);
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      if (k === "frameworkUpdates" || k === "responseContext" || k === "playbackTracking" || k === "topbar" || k === "header") continue;
+      walk(node[k], depth + 1);
+    }
+  }
+  walk(data, 0);
+  return out;
+}
+
+function fromOembed(j) {
+  if (!j) return { name: "", poster: "", description: "", channel: "", date: "", runtime: "" };
+  return {
+    name: j.title || "",
+    poster: j.thumbnail_url || "",
+    description: "",
+    channel: j.author_name || "",
+    date: "",
+    runtime: "",
+  };
+}
+
+function incomplete(d) {
+  return !d || !d.name || !d.channel || !d.description || !d.date;
 }
 
 const RENDERERS = ["videoRenderer", "gridVideoRenderer", "playlistVideoRenderer", "compactVideoRenderer", "videoWithContextRenderer"];
@@ -97,10 +243,7 @@ function collect(node, out, depth) {
   }
   const lock = node.lockupViewModel;
   if (lock && typeof lock.contentId === "string" && /^[a-zA-Z0-9_-]{11}$/.test(lock.contentId)) {
-    const id = lock.contentId;
-    let title = "";
-    try { title = lock.metadata.lockupMetadataViewModel.title.content; } catch (e) { /* no title in this lockup */ }
-    out.push({ id: PREFIX + id, type: "video", name: title || id, poster: posterOf(id), posterShape: "landscape" });
+    out.push(lockupMeta(lock));
     return;
   }
   const keys = Object.keys(node);
@@ -248,19 +391,24 @@ module.exports = {
     }
   },
 
-  async meta({ id }) {
+  async meta({ id, settings }) {
     const vid = videoId(id);
     if (!vid) return { meta: null };
+    const cookies = cookieHeader(settings && settings.cookies);
     const base = { id: PREFIX + vid, type: "video", name: vid, poster: posterOf(vid), posterShape: "landscape" };
+    let d = { name: "", poster: "", description: "", channel: "", date: "", runtime: "" };
     try {
-      const res = await fetch("https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + vid));
-      const j = await res.json();
-      if (j && j.title) {
-        base.name = j.title;
-        if (j.thumbnail_url) base.poster = j.thumbnail_url;
-        if (j.author_name) base.description = j.author_name;
+      d = mergeDetails(d, fromPlayer(await innertube("player", { context: context(), videoId: vid }, cookies)));
+      if (incomplete(d)) d = mergeDetails(d, fromNext(await innertube("next", { context: context(), videoId: vid }, cookies)));
+      if (incomplete(d)) {
+        const res = await fetch("https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + vid));
+        const j = await res.json();
+        d = mergeDetails(d, fromOembed(j));
       }
     } catch (e) { /* keep the id as the name */ }
+    if (d.name) base.name = d.name;
+    if (d.poster) base.poster = d.poster;
+    withCredits(base, d.channel, d.date, d.description, d.runtime);
     return { meta: base };
   },
 
