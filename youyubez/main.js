@@ -586,8 +586,6 @@ function zephyrStreams(data, L) {
   const sd = (data && (data.streamingData || data.streaming_data)) || {};
   const ua = (data && data._playUa) || VISION_UA;
   const out = [];
-  if (sd.hlsManifestUrl) out.push(zephyrStream("1080p Auto", sd.hlsManifestUrl, L, null, ua));
-  if (sd.dashManifestUrl) out.push(zephyrStream("DASH", sd.dashManifestUrl, L, null, ua));
   const all = (sd.formats || []).concat(sd.adaptiveFormats || sd.adaptive_formats || []);
   const audio = bestAudio(all);
   const byH = {};
@@ -607,9 +605,10 @@ function zephyrStreams(data, L) {
   }
   const heights = Object.keys(byH).map(Number).sort(function (a, b) { return b - a; });
   if (audio && heights.length) {
+    // Auto is the highest pair, not HLS ABR (that ladder starts at 144p on the TV).
     for (let i = 0; i < heights.length; i++) {
       const f = byH[heights[i]];
-      const q = f.qualityLabel || f.quality_label || (heights[i] + "p");
+      const q = i === 0 ? (heights[i] + "p Auto") : (f.qualityLabel || f.quality_label || (heights[i] + "p"));
       out.push(zephyrStream(q, f.url, L, { audioUrl: audio.url }, ua));
     }
   } else {
