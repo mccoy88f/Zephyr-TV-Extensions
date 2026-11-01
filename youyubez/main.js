@@ -8,6 +8,9 @@ const VR_VER = "1.60.19";
 const VR_UA = "com.google.android.apps.youtube.vr.oculus/" + VR_VER + " (Linux; U; Android 12; eureka-user Build/SQ3A.220605.009.A1) gzip";
 const ANDROID_VER = "19.28.35";
 const ANDROID_UA = "com.google.android.youtube/" + ANDROID_VER + " (Linux; U; Android 13) gzip";
+const VISION_VER = "1.02";
+const VISION_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15";
+const AD_KEYS = ["adSlotRenderer", "promotedSparklesWebRenderer", "promotedVideoRenderer", "searchPyvRenderer", "adPlacementRenderer", "instreamVideoAdRenderer"];
 
 const TEXT = {
   it: {
@@ -108,8 +111,30 @@ function withCredits(m, channel, published, description, runtime) {
   return m;
 }
 
+function badgeLabel(b) {
+  const m = (b && b.metadataBadgeRenderer) || {};
+  return String(m.label || m.style || "").toLowerCase();
+}
+
+function isAdItem(v) {
+  if (!v) return true;
+  if (v.navigationEndpoint && v.navigationEndpoint.reelWatchEndpoint) return true;
+  const badges = [].concat(v.badges || [], v.ownerBadges || []);
+  for (let i = 0; i < badges.length; i++) {
+    const s = badgeLabel(badges[i]);
+    if (s === "ad" || s.indexOf("ads") === 0 || s.indexOf("promoted") >= 0 || s.indexOf("sponsored") >= 0 ||
+        s.indexOf("pubblicit") >= 0 || s.indexOf("promosso") >= 0 || s.indexOf("badge_style_type_ad") >= 0) return true;
+  }
+  const overlays = v.thumbnailOverlays || [];
+  for (let i = 0; i < overlays.length; i++) {
+    const t = overlays[i].thumbnailOverlayTimeStatusRenderer;
+    if (t && String(t.style || t.icon || "").indexOf("SHORTS") >= 0) return true;
+  }
+  return false;
+}
+
 function metaOf(v) {
-  if (!v) return null;
+  if (!v || isAdItem(v)) return null;
   const id = v.videoId || v.video_id || (v.navigationEndpoint && v.navigationEndpoint.watchEndpoint && v.navigationEndpoint.watchEndpoint.videoId);
   if (!id || !/^[a-zA-Z0-9_-]{11}$/.test(id)) return null;
   return withCredits({
@@ -122,6 +147,8 @@ function metaOf(v) {
 }
 
 function lockupMeta(lock) {
+  const kind = String(lock.contentType || lock.content_type || "VIDEO").toUpperCase();
+  if (/SHORT|PLAYLIST|PODCAST|\bAD\b|GAME|ALBUM/.test(kind)) return null;
   const id = lock.contentId;
   let title = "";
   let channel = "";
@@ -247,13 +274,15 @@ function collect(node, out, depth) {
   }
   const lock = node.lockupViewModel;
   if (lock && typeof lock.contentId === "string" && /^[a-zA-Z0-9_-]{11}$/.test(lock.contentId)) {
-    out.push(lockupMeta(lock));
+    const m = lockupMeta(lock);
+    if (m) out.push(m);
     return;
   }
   const keys = Object.keys(node);
   for (let i = 0; i < keys.length && out.length < 150; i++) {
     const k = keys[i];
     if (k === "playbackTracking" || k === "responseContext" || k === "frameworkUpdates" || k === "topbar" || k === "header") continue;
+    if (AD_KEYS.indexOf(k) >= 0) continue;
     collect(node[k], out, depth + 1);
   }
 }
@@ -336,7 +365,7 @@ function say(msg) {
 
 async function innertube(path, body, cookies, extra, host) {
   const cn = body && body.context && body.context.client && body.context.client.clientName;
-  const mobile = cn === "ANDROID" || cn === "ANDROID_VR";
+  const mobile = cn === "ANDROID" || cn === "ANDROID_VR" || cn === "VISIONOS";
   const headers = {
     "Content-Type": "application/json",
     "Accept": "application/json",
@@ -368,6 +397,9 @@ async function innertube(path, body, cookies, extra, host) {
   } else if (cn === "ANDROID_VR") {
     headers["X-YouTube-Client-Name"] = "28";
     headers["X-YouTube-Client-Version"] = VR_VER;
+  } else if (cn === "VISIONOS") {
+    headers["X-YouTube-Client-Name"] = "101";
+    headers["X-YouTube-Client-Version"] = VISION_VER;
   }
   const res = await fetch("https://" + (host || "www.youtube.com") + "/youtubei/v1/" + path + "?prettyPrint=false", {
     method: "POST",
@@ -432,6 +464,27 @@ function playerHeaders() {
   return { "User-Agent": VR_UA };
 }
 
+function visionContext() {
+  const loc = locale();
+  return {
+    client: {
+      clientName: "VISIONOS",
+      clientVersion: VISION_VER,
+      deviceMake: "Apple",
+      deviceModel: "RealityDevice17,1",
+      userAgent: VISION_UA,
+      osName: "visionOS",
+      osVersion: "26.5.23O471",
+      hl: loc.hl,
+      gl: loc.gl,
+    },
+  };
+}
+
+function visionHeaders() {
+  return { "User-Agent": VISION_UA };
+}
+
 function androidPlayerContext() {
   const loc = locale();
   return {
@@ -450,11 +503,11 @@ function androidPlayerHeaders() {
   return { "User-Agent": ANDROID_UA };
 }
 
-function playHeaders() {
+function playHeaders(ua) {
   return {
     proxyHeaders: {
       request: {
-        "User-Agent": VR_UA,
+        "User-Agent": ua || VISION_UA,
         "Origin": "https://www.youtube.com",
         "Referer": "https://www.youtube.com/",
       },
@@ -472,8 +525,8 @@ function muxed(f) {
   return hasAudio && hasVideo;
 }
 
-function zephyrStream(title, url, L, extra) {
-  const hints = playHeaders();
+function zephyrStream(title, url, L, extra, ua) {
+  const hints = playHeaders(ua);
   if (extra) {
     const keys = Object.keys(extra);
     for (let i = 0; i < keys.length; i++) hints[keys[i]] = extra[keys[i]];
@@ -512,20 +565,29 @@ function bestAudio(list) {
   return aac[0] || other[0] || null;
 }
 
-function addMuxed(out, f, L) {
+function addMuxed(out, f, L, ua) {
   if (!f || !f.url) return;
   const mime = mimeOf(f).split(";")[0];
   if (mime.indexOf("audio/") === 0) return;
   if (!muxed(f) && mime.indexOf("video/") === 0) return;
   const q = f.qualityLabel || f.quality_label || f.quality || L.playZephyr;
-  out.push(zephyrStream((q + (mime ? " " + mime : "")).trim(), f.url, L));
+  out.push(zephyrStream((q + (mime ? " " + mime : "")).trim(), f.url, L, null, ua));
+}
+
+function heightOf(f) {
+  if (!f) return 0;
+  if (f.height) return f.height;
+  const q = String(f.qualityLabel || f.quality_label || "");
+  const m = q.match(/(\d+)p/);
+  return m ? parseInt(m[1], 10) : 0;
 }
 
 function zephyrStreams(data, L) {
   const sd = (data && (data.streamingData || data.streaming_data)) || {};
+  const ua = (data && data._playUa) || VISION_UA;
   const out = [];
-  if (sd.hlsManifestUrl) out.push(zephyrStream("HLS", sd.hlsManifestUrl, L));
-  if (sd.dashManifestUrl) out.push(zephyrStream("DASH", sd.dashManifestUrl, L));
+  if (sd.hlsManifestUrl) out.push(zephyrStream("1080p Auto", sd.hlsManifestUrl, L, null, ua));
+  if (sd.dashManifestUrl) out.push(zephyrStream("DASH", sd.dashManifestUrl, L, null, ua));
   const all = (sd.formats || []).concat(sd.adaptiveFormats || sd.adaptive_formats || []);
   const audio = bestAudio(all);
   const byH = {};
@@ -535,7 +597,7 @@ function zephyrStreams(data, L) {
     const m = mimeOf(f);
     const mp4 = m.indexOf("mp4") >= 0;
     if (!mp4 && m.indexOf("webm") < 0) continue;
-    const h = f.height || 0;
+    const h = heightOf(f);
     if (h < 240) continue;
     const cur = byH[h];
     if (!cur) { byH[h] = f; continue; }
@@ -548,11 +610,11 @@ function zephyrStreams(data, L) {
     for (let i = 0; i < heights.length; i++) {
       const f = byH[heights[i]];
       const q = f.qualityLabel || f.quality_label || (heights[i] + "p");
-      out.push(zephyrStream(q, f.url, L, { audioUrl: audio.url }));
+      out.push(zephyrStream(q, f.url, L, { audioUrl: audio.url }, ua));
     }
   } else {
-    (sd.formats || []).forEach(function (f) { addMuxed(out, f, L); });
-    (sd.adaptiveFormats || sd.adaptive_formats || []).forEach(function (f) { if (muxed(f)) addMuxed(out, f, L); });
+    (sd.formats || []).forEach(function (f) { addMuxed(out, f, L, ua); });
+    (sd.adaptiveFormats || sd.adaptive_formats || []).forEach(function (f) { if (muxed(f)) addMuxed(out, f, L, ua); });
   }
   return out;
 }
@@ -596,6 +658,7 @@ function dummyL() { return { zephyr: "x", playZephyr: "x" }; }
 
 async function playerData(vid, cookies) {
   const clients = [
+    { context: visionContext(), extra: visionHeaders(), label: "vision" },
     { context: playerContext(), extra: playerHeaders(), label: "vr" },
     { context: androidPlayerContext(), extra: androidPlayerHeaders(), label: "android" },
   ];
@@ -611,7 +674,10 @@ async function playerData(vid, cookies) {
         const n = zephyrStreams(data, dummyL()).length;
         const st = (data.playabilityStatus && data.playabilityStatus.status) || "?";
         say("player " + clients[c].label + " " + hosts[h] + " " + st + " urls " + n);
-        if (n) return data;
+        if (n) {
+          data._playUa = clients[c].extra["User-Agent"];
+          return data;
+        }
         if (data && data.videoDetails && !best.videoDetails) best = data;
       }
     }
@@ -650,6 +716,10 @@ function unique(out) {
     seen[m.id] = true;
     return true;
   });
+}
+
+function looksLikeAdTitle(name) {
+  return /try not to laugh|best of the internet|tiktok rewind|compilation\b|viral funny|#\d{2,}/i.test(String(name || ""));
 }
 
 module.exports = {
@@ -696,14 +766,16 @@ module.exports = {
         if (!out.length && (id === "discover" || id === "trending")) {
           const lang = (typeof zephyr !== "undefined" && zephyr.language) || "en";
           const q = id === "trending"
-            ? (lang === "it" ? "tendenze" : "trending")
-            : (lang === "it" ? "musica" : "music");
+            ? (lang === "it" ? "tendenze youtube" : "trending videos")
+            : (lang === "it" ? "notizie oggi" : "today news");
           data = await innertube("search", { context: context(), query: q, params: SEARCH_VIDEOS }, cookies);
           collect(data, out, 0);
         }
       }
       say("catalog " + id + " n " + out.length);
-      return { metas: unique(out).slice(skip, skip + 100) };
+      let metas = unique(out);
+      if (id === "discover" || id === "trending") metas = metas.filter(function (m) { return !looksLikeAdTitle(m.name); });
+      return { metas: metas.slice(skip, skip + 100) };
     } catch (e) {
       say("catalog failed " + id + " " + e);
       return { metas: [] };
