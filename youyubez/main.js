@@ -6,6 +6,8 @@ const CLIENT_VER = "2.20241001.00.00";
 const SEARCH_VIDEOS = "EgIQAQ=="; // InnerTube: videos only (smaller answer, videoRenderer rows)
 const VR_VER = "1.60.19";
 const VR_UA = "com.google.android.apps.youtube.vr.oculus/" + VR_VER + " (Linux; U; Android 12; eureka-user Build/SQ3A.220605.009.A1) gzip";
+const ANDROID_VER = "19.28.35";
+const ANDROID_UA = "com.google.android.youtube/" + ANDROID_VER + " (Linux; U; Android 13) gzip";
 
 const TEXT = {
   it: {
@@ -339,6 +341,20 @@ function context() {
   };
 }
 
+function androidContext() {
+  const loc = locale();
+  return {
+    client: {
+      clientName: "ANDROID",
+      clientVersion: ANDROID_VER,
+      androidSdkVersion: 33,
+      userAgent: ANDROID_UA,
+      hl: loc.hl,
+      gl: loc.gl,
+    },
+  };
+}
+
 /** Player client that still answers stream URLs (WEB's player is UNPLAYABLE without a token). */
 function playerContext() {
   const loc = locale();
@@ -523,13 +539,20 @@ module.exports = {
         const q = extra && extra.search;
         if (!q) return { metas: [] };
         data = await innertube("search", { context: context(), query: q, params: SEARCH_VIDEOS }, cookies);
+        collect(data, out, 0);
       } else if (BROWSE[id]) {
         if ((id === "subs" || id === "later" || id === "history") && !loggedIn(cookies)) return { metas: [] };
         data = await innertube("browse", { context: context(), browseId: BROWSE[id] }, cookies);
+        collect(data, out, 0);
+        if (!out.length) {
+          data = await innertube("browse", { context: androidContext(), browseId: BROWSE[id] }, cookies || "", { "User-Agent": ANDROID_UA });
+          collect(data, out, 0);
+        }
       }
-      collect(data, out, 0);
+      say("catalog " + id + " n " + out.length);
       return { metas: unique(out).slice(skip, skip + 100) };
     } catch (e) {
+      say("catalog failed " + id + " " + e);
       return { metas: [] };
     }
   },

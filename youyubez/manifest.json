@@ -1,7 +1,7 @@
 {
   "zephyr": 1,
   "id": "org.zephyr.youyubez",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "name": "YouYubeZ",
   "description": "Search and play YouTube in Zephyr TV. Not affiliated with, endorsed by, or connected to YouTube or Google. YouTube is a trademark of Google LLC. Uses youtubei.js (https://www.npmjs.com/package/youtubei.js), downloaded at install.",
   "author": "mccoy88f",
@@ -11,6 +11,8 @@
   "resources": ["catalog", "meta", "stream"],
   "idPrefixes": ["ytz:"],
   "catalogs": [
+    { "type": "video", "id": "discover", "name": "Discover", "extra": [{ "name": "skip" }] },
+    { "type": "video", "id": "trending", "name": "Trending", "extra": [{ "name": "skip" }] },
     { "type": "video", "id": "search", "name": "Search", "extra": [{ "name": "search", "isRequired": true }, { "name": "skip" }] }
   ],
   "settings": true,
