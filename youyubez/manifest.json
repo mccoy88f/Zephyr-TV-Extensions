@@ -5,6 +5,7 @@
   "name": "YouYubeZ",
   "description": "Search and play YouTube in Zephyr TV. Not affiliated with, endorsed by, or connected to YouTube or Google. YouTube is a trademark of Google LLC. Uses youtubei.js (https://www.npmjs.com/package/youtubei.js), downloaded at install.",
   "author": "mccoy88f",
+  "icon": "icon.png",
   "main": "main.js",
   "types": ["channel", "video"],
   "resources": ["catalog", "meta", "stream"],
