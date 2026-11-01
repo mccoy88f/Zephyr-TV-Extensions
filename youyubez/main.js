@@ -293,6 +293,41 @@ function loggedIn(cookies) {
   return /(?:^|;\s*)(?:SID|SAPISID|APISID|HSID|SSID|__Secure-1PSID|__Secure-3PSID|__Secure-1PSIDTS|LOGIN_INFO)=/.test(cookies);
 }
 
+function sha1hex(msg) {
+  function tohex(n) {
+    let s = "";
+    for (let j = 7; j >= 0; j--) s += ((n >>> (j * 4)) & 0xf).toString(16);
+    return s;
+  }
+  function rol(n, b) { return (n << b) | (n >>> (32 - b)); }
+  const l = msg.length;
+  const words = [];
+  for (let i = 0; i < l; i++) words[i >> 2] |= msg.charCodeAt(i) << (24 - (i % 4) * 8);
+  words[l >> 2] |= 0x80 << (24 - (l % 4) * 8);
+  words[(((l + 8) >> 6) * 16) + 15] = l * 8;
+  let h0 = 1732584193, h1 = -271733879, h2 = -1732584194, h3 = 271733878, h4 = -1009589776;
+  for (let bi = 0; bi < words.length; bi += 16) {
+    const w = words.slice(bi, bi + 16);
+    for (let i = 16; i < 80; i++) w[i] = rol(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1);
+    let a = h0, b = h1, c = h2, d = h3, e = h4;
+    for (let i = 0; i < 80; i++) {
+      const f = i < 20 ? (b & c) | (~b & d) : i < 40 ? b ^ c ^ d : i < 60 ? (b & c) | (b & d) | (c & d) : b ^ c ^ d;
+      const k = i < 20 ? 1518500249 : i < 40 ? 1859775393 : i < 60 ? -1894007588 : -899497514;
+      const temp = (rol(a, 5) + f + e + k + (w[i] | 0)) | 0;
+      e = d; d = c; c = rol(b, 30); b = a; a = temp;
+    }
+    h0 = (h0 + a) | 0; h1 = (h1 + b) | 0; h2 = (h2 + c) | 0; h3 = (h3 + d) | 0; h4 = (h4 + e) | 0;
+  }
+  return tohex(h0) + tohex(h1) + tohex(h2) + tohex(h3) + tohex(h4);
+}
+
+function sapisidHash(cookies) {
+  const m = /(?:^|;\s*)(?:SAPISID|__Secure-3PAPISID)=([^;]+)/.exec(cookies || "");
+  if (!m) return "";
+  const ts = Math.floor(Date.now() / 1000);
+  return ts + "_" + sha1hex(ts + " " + m[1] + " https://www.youtube.com");
+}
+
 function say(msg) {
   try { console.log("YouYubeZ " + msg); } catch (e) { /* no console here */ }
 }
@@ -310,7 +345,14 @@ async function innertube(path, body, cookies, extra, host) {
     const keys = Object.keys(extra);
     for (let i = 0; i < keys.length; i++) headers[keys[i]] = extra[keys[i]];
   }
-  if (cookies) headers.Cookie = cookies;
+  if (cookies) {
+    headers.Cookie = cookies;
+    const auth = sapisidHash(cookies);
+    if (auth) {
+      headers.Authorization = "SAPISIDHASH " + auth;
+      headers["X-Origin"] = "https://www.youtube.com";
+    }
+  }
   const res = await fetch("https://" + (host || "www.youtube.com") + "/youtubei/v1/" + path + "?prettyPrint=false", {
     method: "POST",
     headers: headers,
