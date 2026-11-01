@@ -4,6 +4,8 @@
 const PREFIX = "ytz:";
 const CLIENT_VER = "2.20241001.00.00";
 const SEARCH_VIDEOS = "EgIQAQ=="; // InnerTube: videos only (smaller answer, videoRenderer rows)
+const VR_VER = "1.60.19";
+const VR_UA = "com.google.android.apps.youtube.vr.oculus/" + VR_VER + " (Linux; U; Android 12; eureka-user Build/SQ3A.220605.009.A1) gzip";
 
 const TEXT = {
   it: {
@@ -97,10 +99,7 @@ function withCredits(m, channel, published, description, runtime) {
   if (description) m.description = description;
   if (published) m.releaseInfo = dateOf(published);
   if (runtime) m.runtime = runtime;
-  if (channel) {
-    m.director = [channel];
-    m.genres = [channel];
-  }
+  if (channel) m.genres = [channel];
   return m;
 }
 
@@ -289,15 +288,17 @@ function loggedIn(cookies) {
   return /(?:^|;\s*)(?:SID|SAPISID|__Secure-1PSID|__Secure-3PSID|LOGIN_INFO)=/.test(cookies);
 }
 
-async function innertube(path, body, cookies) {
+async function innertube(path, body, cookies, extra) {
   const headers = {
     "Content-Type": "application/json",
     "Accept": "application/json",
     "Origin": "https://www.youtube.com",
     "Referer": "https://www.youtube.com/",
-    "X-YouTube-Client-Name": "1",
-    "X-YouTube-Client-Version": CLIENT_VER,
   };
+  if (extra) {
+    const keys = Object.keys(extra);
+    for (let i = 0; i < keys.length; i++) headers[keys[i]] = extra[keys[i]];
+  }
   if (cookies) headers.Cookie = cookies;
   const res = await fetch("https://www.youtube.com/youtubei/v1/" + path + "?prettyPrint=false", {
     method: "POST",
@@ -309,17 +310,86 @@ async function innertube(path, body, cookies) {
   try { return JSON.parse(text); } catch (e) { return {}; }
 }
 
-function context() {
+function locale() {
   const lang = (typeof zephyr !== "undefined" && zephyr.language) || "en";
   const region = (typeof zephyr !== "undefined" && zephyr.region) || "US";
+  return { hl: lang, gl: region || "US" };
+}
+
+function context() {
+  const loc = locale();
   return {
     client: {
       clientName: "WEB",
       clientVersion: CLIENT_VER,
-      hl: lang,
-      gl: region || "US",
+      hl: loc.hl,
+      gl: loc.gl,
     },
   };
+}
+
+/** Player client that still answers stream URLs (WEB's player is UNPLAYABLE without a token). */
+function playerContext() {
+  const loc = locale();
+  return {
+    client: {
+      clientName: "ANDROID_VR",
+      clientVersion: VR_VER,
+      androidSdkVersion: 32,
+      userAgent: VR_UA,
+      hl: loc.hl,
+      gl: loc.gl,
+    },
+  };
+}
+
+function playerHeaders() {
+  return {
+    "User-Agent": VR_UA,
+    "X-YouTube-Client-Name": "28",
+    "X-YouTube-Client-Version": VR_VER,
+  };
+}
+
+function playHeaders() {
+  return {
+    proxyHeaders: {
+      request: {
+        "User-Agent": VR_UA,
+        "Origin": "https://www.youtube.com",
+        "Referer": "https://www.youtube.com/",
+      },
+    },
+  };
+}
+
+function muxed(f) {
+  const url = f && f.url;
+  if (!url) return false;
+  const mime = String(f.mimeType || f.mime_type || "");
+  if (mime.indexOf("audio/") === 0) return false;
+  const hasAudio = mime.indexOf("mp4a") >= 0 || mime.indexOf("opus") >= 0 || !!f.audioQuality;
+  const hasVideo = mime.indexOf("video/") === 0 || !!(f.qualityLabel || f.quality_label || f.width || f.height);
+  return hasAudio && hasVideo;
+}
+
+function zephyrStream(title, url, L) {
+  return { name: L.zephyr, title: title, url: url, behaviorHints: playHeaders() };
+}
+
+function zephyrStreams(data, L) {
+  const sd = (data && (data.streamingData || data.streaming_data)) || {};
+  const out = [];
+  if (sd.hlsManifestUrl) out.push(zephyrStream("HLS", sd.hlsManifestUrl, L));
+  if (sd.dashManifestUrl) out.push(zephyrStream("DASH", sd.dashManifestUrl, L));
+  const all = (sd.formats || []).concat(sd.adaptiveFormats || sd.adaptive_formats || []);
+  all.forEach(function (f) {
+    if (!muxed(f)) return;
+    const mime = String(f.mimeType || f.mime_type || "").split(";")[0];
+    const q = f.qualityLabel || f.quality_label || f.quality || L.playZephyr;
+    out.push(zephyrStream((q + (mime ? " " + mime : "")).trim(), f.url, L));
+  });
+  return out;
 }
 
 function catalogs(settings) {
@@ -398,7 +468,9 @@ module.exports = {
     const base = { id: PREFIX + vid, type: "video", name: vid, poster: posterOf(vid), posterShape: "landscape" };
     let d = { name: "", poster: "", description: "", channel: "", date: "", runtime: "" };
     try {
-      d = mergeDetails(d, fromPlayer(await innertube("player", { context: context(), videoId: vid }, cookies)));
+      d = mergeDetails(d, fromPlayer(await innertube("player", {
+        context: playerContext(), videoId: vid, contentCheckOk: true, racyCheckOk: true,
+      }, cookies, playerHeaders())));
       if (incomplete(d)) d = mergeDetails(d, fromNext(await innertube("next", { context: context(), videoId: vid }, cookies)));
       if (incomplete(d)) {
         const res = await fetch("https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + vid));
@@ -423,6 +495,12 @@ module.exports = {
     }
     if (play === "zephyr" || play === "both") {
       try {
+        const data = await innertube("player", {
+          context: playerContext(), videoId: vid, contentCheckOk: true, racyCheckOk: true,
+        }, cookieHeader(settings && settings.cookies), playerHeaders());
+        zephyrStreams(data, L).forEach(function (s) { streams.push(s); });
+      } catch (e) { /* player refused the video */ }
+      try {
         const lib = require("youtubei.js");
         const Innertube = lib.Innertube || lib;
         const yt = await Innertube.create({ cookie: cookieHeader(settings && settings.cookies) });
@@ -430,13 +508,12 @@ module.exports = {
         const formats = (info && (info.streaming_data || info.streamingData) &&
           ((info.streaming_data || info.streamingData).adaptive_formats ||
             (info.streaming_data || info.streamingData).formats)) || [];
+        const have = {};
+        streams.forEach(function (s) { if (s.url) have[s.url] = true; });
         formats.forEach(function (f) {
-          if (!f.url) return;
-          streams.push({
-            name: L.zephyr,
-            title: (f.quality_label || f.quality || L.playZephyr) + (f.mime_type ? " " + String(f.mime_type).split(";")[0] : ""),
-            url: f.url,
-          });
+          if (!f.url || have[f.url] || !muxed(f)) return;
+          const mime = f.mime_type ? " " + String(f.mime_type).split(";")[0] : "";
+          streams.push(zephyrStream((f.quality_label || f.quality || L.playZephyr) + mime, f.url, L));
         });
       } catch (e) { /* library missing, or QuickJS cannot run the full client */ }
     }
