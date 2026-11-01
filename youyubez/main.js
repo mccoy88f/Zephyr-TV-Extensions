@@ -275,7 +275,9 @@ function cookieHeader(raw) {
   }
   if (s.indexOf("\t") >= 0 && s.indexOf("\n") >= 0 && (/youtube\.com/i.test(s) || /Netscape/i.test(s))) {
     return s.split(/\r?\n/).map(function (line) {
-      if (!line || line.charAt(0) === "#") return "";
+      if (!line) return "";
+      if (line.indexOf("#HttpOnly_") === 0) line = line.slice(10);
+      else if (line.charAt(0) === "#") return "";
       const p = line.split("\t");
       if (p.length >= 7) return p[5] + "=" + p[6];
       return "";
