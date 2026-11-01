@@ -17,7 +17,7 @@ const TEXT = {
     search: "Cerca", discover: "Scopri", trending: "Tendenze", subs: "Iscrizioni", later: "Guarda dopo", history: "Cronologia",
     play: "Riproduci con", playYoutube: "App YouTube nativa", playZephyr: "Player Zephyr TV", playBoth: "Entrambi",
     playDesc: "App YouTube del TV, il player di Zephyr TV, o entrambi nella lista degli stream.",
-    cookies: "Cookie", cookiesDesc: "Incolla i cookie del tuo browser YouTube (riga Cookie, oppure l'export Netscape o JSON). Servono per Iscrizioni, Guarda dopo e Cronologia. È l'accesso al tuo account.",
+    cookies: "Cookie", cookiesDesc: "Incolla i cookie del tuo browser YouTube (riga Cookie, oppure l'export Netscape o JSON). Zephyr TV li verifica e aggiorna le sezioni. Senza cookie, Scopri e Tendenze sono liste pubbliche, non la tua home.",
     disc: "YouYubeZ non è affiliata, sostenuta né collegata a YouTube o a Google. YouTube è un marchio di Google LLC. Usa youtubei.js.",
     youtube: "YouTube", zephyr: "Zephyr TV",
   },
@@ -25,7 +25,7 @@ const TEXT = {
     search: "Search", discover: "Discover", trending: "Trending", subs: "Subscriptions", later: "Watch later", history: "History",
     play: "Play with", playYoutube: "YouTube app", playZephyr: "Zephyr TV player", playBoth: "Both",
     playDesc: "The TV's YouTube app, Zephyr TV's player, or both in the stream list.",
-    cookies: "Cookies", cookiesDesc: "Paste cookies from your YouTube browser session (the Cookie header, or a Netscape or JSON export). Needed for Subscriptions, Watch later and History. This is access to your account.",
+    cookies: "Cookies", cookiesDesc: "Paste cookies from your YouTube browser session (the Cookie header, or a Netscape or JSON export). Zephyr TV checks them and refreshes the lists. Without cookies, Discover and Trending are public lists, not your home.",
     disc: "YouYubeZ is not affiliated with, endorsed by, or connected to YouTube or Google. YouTube is a trademark of Google LLC. Uses youtubei.js.",
     youtube: "YouTube", zephyr: "Zephyr TV",
   },
@@ -33,7 +33,7 @@ const TEXT = {
     search: "Buscar", discover: "Descubrir", trending: "Tendencias", subs: "Suscripciones", later: "Ver más tarde", history: "Historial",
     play: "Reproducir con", playYoutube: "App de YouTube", playZephyr: "Reproductor Zephyr TV", playBoth: "Ambos",
     playDesc: "La app YouTube del televisor, el reproductor de Zephyr TV, o ambos en la lista.",
-    cookies: "Cookies", cookiesDesc: "Pega las cookies de tu sesión de YouTube (la cabecera Cookie, o un export Netscape o JSON). Hacen falta para Suscripciones, Ver más tarde e Historial. Es el acceso a tu cuenta.",
+    cookies: "Cookies", cookiesDesc: "Pega las cookies de tu sesión de YouTube (la cabecera Cookie, o un export Netscape o JSON). Zephyr TV las comprueba y actualiza las listas. Sin cookies, Descubrir y Tendencias son listas públicas, no tu inicio.",
     disc: "YouYubeZ no está afiliada, respaldada ni conectada con YouTube o Google. YouTube es una marca de Google LLC. Usa youtubei.js.",
     youtube: "YouTube", zephyr: "Zephyr TV",
   },
@@ -41,7 +41,7 @@ const TEXT = {
     search: "Recherche", discover: "Découvrir", trending: "Tendances", subs: "Abonnements", later: "À regarder plus tard", history: "Historique",
     play: "Lire avec", playYoutube: "Application YouTube", playZephyr: "Lecteur Zephyr TV", playBoth: "Les deux",
     playDesc: "L'application YouTube du téléviseur, le lecteur Zephyr TV, ou les deux dans la liste.",
-    cookies: "Cookies", cookiesDesc: "Collez les cookies de votre session YouTube (l'en-tête Cookie, ou un export Netscape ou JSON). Ils servent pour Abonnements, À regarder plus tard et Historique. C'est l'accès à votre compte.",
+    cookies: "Cookies", cookiesDesc: "Collez les cookies de votre session YouTube (l'en-tête Cookie, ou un export Netscape ou JSON). Zephyr TV les vérifie et met à jour les listes. Sans cookies, Découvrir et Tendances sont des listes publiques, pas votre accueil.",
     disc: "YouYubeZ n'est pas affiliée, soutenue ni liée à YouTube ou Google. YouTube est une marque de Google LLC. Utilise youtubei.js.",
     youtube: "YouTube", zephyr: "Zephyr TV",
   },
@@ -760,6 +760,20 @@ module.exports = {
     return { catalogs: catalogs(settings) };
   },
 
+  async verify({ settings }) {
+    const cookies = cookieHeader(settings && settings.cookies);
+    const has = loggedIn(cookies);
+    const ids = has ? ["discover", "subs", "later", "history", "trending"] : ["discover", "trending"];
+    const catalogs = {};
+    for (let i = 0; i < ids.length; i++) {
+      const r = await module.exports.catalog({ id: ids[i], extra: {}, settings: settings || {} });
+      catalogs[ids[i]] = ((r && r.metas) || []).length;
+    }
+    const logged = has && ((catalogs.subs || 0) + (catalogs.later || 0) + (catalogs.history || 0) > 0);
+    say("verify cookies=" + has + " session=" + logged + " " + JSON.stringify(catalogs));
+    return { cookies: has, loggedIn: logged, catalogs: catalogs };
+  },
+
   async catalog({ id, extra, settings }) {
     try {
       const cookies = cookieHeader(settings && settings.cookies);
@@ -781,10 +795,10 @@ module.exports = {
         }
         // Home and trending: InnerTube browse is often empty (consent or a stale session). Search still lists videos.
         if (!out.length && (id === "discover" || id === "trending")) {
-          const lang = (typeof zephyr !== "undefined" && zephyr.language) || "en";
+          const loc = locale();
           const q = id === "trending"
-            ? (lang === "it" ? "tendenze youtube" : "trending videos")
-            : (lang === "it" ? "notizie oggi" : "today news");
+            ? (loc.hl === "it" ? "tendenze" : "trending")
+            : (loc.hl === "it" ? "video" : "videos");
           data = await innertube("search", { context: context(), query: q, params: SEARCH_VIDEOS }, cookies);
           collect(data, out, 0);
         }
