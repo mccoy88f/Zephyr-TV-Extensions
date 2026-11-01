@@ -9,7 +9,7 @@ const VR_UA = "com.google.android.apps.youtube.vr.oculus/" + VR_VER + " (Linux; 
 
 const TEXT = {
   it: {
-    search: "Cerca", discover: "Scopri", subs: "Iscrizioni", later: "Guarda dopo", history: "Cronologia",
+    search: "Cerca", discover: "Scopri", trending: "Tendenze", subs: "Iscrizioni", later: "Guarda dopo", history: "Cronologia",
     play: "Riproduci con", playYoutube: "App YouTube nativa", playZephyr: "Player Zephyr TV", playBoth: "Entrambi",
     playDesc: "App YouTube del TV, il player di Zephyr TV, o entrambi nella lista degli stream.",
     cookies: "Cookie", cookiesDesc: "Incolla i cookie del tuo browser YouTube (riga Cookie, oppure l'export Netscape o JSON). Servono per Iscrizioni, Guarda dopo e Cronologia. È l'accesso al tuo account.",
@@ -17,7 +17,7 @@ const TEXT = {
     youtube: "YouTube", zephyr: "Zephyr TV",
   },
   en: {
-    search: "Search", discover: "Discover", subs: "Subscriptions", later: "Watch later", history: "History",
+    search: "Search", discover: "Discover", trending: "Trending", subs: "Subscriptions", later: "Watch later", history: "History",
     play: "Play with", playYoutube: "YouTube app", playZephyr: "Zephyr TV player", playBoth: "Both",
     playDesc: "The TV's YouTube app, Zephyr TV's player, or both in the stream list.",
     cookies: "Cookies", cookiesDesc: "Paste cookies from your YouTube browser session (the Cookie header, or a Netscape or JSON export). Needed for Subscriptions, Watch later and History. This is access to your account.",
@@ -25,7 +25,7 @@ const TEXT = {
     youtube: "YouTube", zephyr: "Zephyr TV",
   },
   es: {
-    search: "Buscar", discover: "Descubrir", subs: "Suscripciones", later: "Ver más tarde", history: "Historial",
+    search: "Buscar", discover: "Descubrir", trending: "Tendencias", subs: "Suscripciones", later: "Ver más tarde", history: "Historial",
     play: "Reproducir con", playYoutube: "App de YouTube", playZephyr: "Reproductor Zephyr TV", playBoth: "Ambos",
     playDesc: "La app YouTube del televisor, el reproductor de Zephyr TV, o ambos en la lista.",
     cookies: "Cookies", cookiesDesc: "Pega las cookies de tu sesión de YouTube (la cabecera Cookie, o un export Netscape o JSON). Hacen falta para Suscripciones, Ver más tarde e Historial. Es el acceso a tu cuenta.",
@@ -33,7 +33,7 @@ const TEXT = {
     youtube: "YouTube", zephyr: "Zephyr TV",
   },
   fr: {
-    search: "Recherche", discover: "Découvrir", subs: "Abonnements", later: "À regarder plus tard", history: "Historique",
+    search: "Recherche", discover: "Découvrir", trending: "Tendances", subs: "Abonnements", later: "À regarder plus tard", history: "Historique",
     play: "Lire avec", playYoutube: "Application YouTube", playZephyr: "Lecteur Zephyr TV", playBoth: "Les deux",
     playDesc: "L'application YouTube du téléviseur, le lecteur Zephyr TV, ou les deux dans la liste.",
     cookies: "Cookies", cookiesDesc: "Collez les cookies de votre session YouTube (l'en-tête Cookie, ou un export Netscape ou JSON). Ils servent pour Abonnements, À regarder plus tard et Historique. C'est l'accès à votre compte.",
@@ -288,28 +288,37 @@ function cookieHeader(raw) {
 }
 
 function loggedIn(cookies) {
-  return /(?:^|;\s*)(?:SID|SAPISID|__Secure-1PSID|__Secure-3PSID|LOGIN_INFO)=/.test(cookies);
+  return /(?:^|;\s*)(?:SID|SAPISID|APISID|HSID|SSID|__Secure-1PSID|__Secure-3PSID|__Secure-1PSIDTS|LOGIN_INFO)=/.test(cookies);
 }
 
-async function innertube(path, body, cookies, extra) {
+function say(msg) {
+  try { console.log("YouYubeZ " + msg); } catch (e) { /* no console here */ }
+}
+
+async function innertube(path, body, cookies, extra, host) {
   const headers = {
     "Content-Type": "application/json",
     "Accept": "application/json",
-    "Origin": "https://www.youtube.com",
-    "Referer": "https://www.youtube.com/",
   };
+  if (!extra || !extra["User-Agent"]) {
+    headers.Origin = "https://www.youtube.com";
+    headers.Referer = "https://www.youtube.com/";
+  }
   if (extra) {
     const keys = Object.keys(extra);
     for (let i = 0; i < keys.length; i++) headers[keys[i]] = extra[keys[i]];
   }
   if (cookies) headers.Cookie = cookies;
-  const res = await fetch("https://www.youtube.com/youtubei/v1/" + path + "?prettyPrint=false", {
+  const res = await fetch("https://" + (host || "www.youtube.com") + "/youtubei/v1/" + path + "?prettyPrint=false", {
     method: "POST",
     headers: headers,
     body: JSON.stringify(body),
   });
   const text = await res.text();
-  try { return JSON.parse(text); } catch (e) { return {}; }
+  try { return JSON.parse(text); } catch (e) {
+    say("player json failed " + (host || "www") + " " + text.length);
+    return {};
+  }
 }
 
 function locale() {
@@ -433,16 +442,24 @@ function dummyL() { return { zephyr: "x", playZephyr: "x" }; }
 
 async function playerData(vid, cookies) {
   const body = { context: playerContext(), videoId: vid, contentCheckOk: true, racyCheckOk: true };
+  const hosts = ["www.youtube.com", "youtubei.googleapis.com"];
   const tries = ["", cookies || ""];
   let best = {};
-  for (let i = 0; i < tries.length; i++) {
-    if (i && !tries[i]) continue;
-    const data = await innertube("player", body, tries[i], playerHeaders());
-    if (zephyrStreams(data, dummyL()).length) return data;
-    if (data && data.videoDetails && !best.videoDetails) best = data;
+  for (let h = 0; h < hosts.length; h++) {
+    for (let i = 0; i < tries.length; i++) {
+      if (i && !tries[i]) continue;
+      const data = await innertube("player", body, tries[i], playerHeaders(), hosts[h]);
+      const n = zephyrStreams(data, dummyL()).length;
+      const st = (data.playabilityStatus && data.playabilityStatus.status) || "?";
+      say("player " + hosts[h] + " " + st + " urls " + n);
+      if (n) return data;
+      if (data && data.videoDetails && !best.videoDetails) best = data;
+    }
   }
   const page = await fromWatchPage(vid, cookies);
-  if (zephyrStreams(page, dummyL()).length) return page;
+  const n = zephyrStreams(page, dummyL()).length;
+  say("watch page urls " + n);
+  if (n) return page;
   if (page && page.videoDetails) return page;
   return best;
 }
@@ -450,11 +467,12 @@ async function playerData(vid, cookies) {
 function catalogs(settings) {
   const L = t();
   const list = [
+    { type: "video", id: "discover", name: L.discover, extra: [{ name: "skip" }] },
+    { type: "video", id: "trending", name: L.trending, extra: [{ name: "skip" }] },
     { type: "video", id: "search", name: L.search, extra: [{ name: "search", isRequired: true }, { name: "skip" }] },
   ];
   if (loggedIn(cookieHeader(settings && settings.cookies))) {
-    list.unshift(
-      { type: "video", id: "discover", name: L.discover, extra: [{ name: "skip" }] },
+    list.splice(1, 0,
       { type: "video", id: "subs", name: L.subs, extra: [{ name: "skip" }] },
       { type: "video", id: "later", name: L.later, extra: [{ name: "skip" }] },
       { type: "video", id: "history", name: L.history, extra: [{ name: "skip" }] },
@@ -463,7 +481,7 @@ function catalogs(settings) {
   return list;
 }
 
-const BROWSE = { discover: "FEwhat_to_watch", subs: "FEsubscriptions", later: "VLWL", history: "FEhistory" };
+const BROWSE = { discover: "FEwhat_to_watch", trending: "FEtrending", subs: "FEsubscriptions", later: "VLWL", history: "FEhistory" };
 
 function unique(out) {
   const seen = {};
@@ -506,7 +524,7 @@ module.exports = {
         if (!q) return { metas: [] };
         data = await innertube("search", { context: context(), query: q, params: SEARCH_VIDEOS }, cookies);
       } else if (BROWSE[id]) {
-        if (!loggedIn(cookies)) return { metas: [] };
+        if ((id === "subs" || id === "later" || id === "history") && !loggedIn(cookies)) return { metas: [] };
         data = await innertube("browse", { context: context(), browseId: BROWSE[id] }, cookies);
       }
       collect(data, out, 0);
@@ -543,28 +561,26 @@ module.exports = {
     const play = (settings && settings.play) || "both";
     const L = t();
     const streams = [];
-    if (play === "zephyr" || play === "both") {
-      try {
-        zephyrStreams(await playerData(vid, cookieHeader(settings && settings.cookies)), L)
-          .forEach(function (s) { streams.push(s); });
-      } catch (e) { /* player refused the video */ }
-      try {
-        const lib = require("youtubei.js");
-        const Innertube = lib.Innertube || lib;
-        const yt = await Innertube.create({ cookie: cookieHeader(settings && settings.cookies) });
-        const info = await yt.getInfo(vid);
-        const formats = (info && (info.streaming_data || info.streamingData) &&
-          ((info.streaming_data || info.streamingData).adaptive_formats ||
-            (info.streaming_data || info.streamingData).formats)) || [];
-        const have = {};
-        streams.forEach(function (s) { if (s.url) have[s.url] = true; });
-        formats.forEach(function (f) {
-          if (!f.url || have[f.url] || !muxed(f)) return;
-          const mime = f.mime_type ? " " + String(f.mime_type).split(";")[0] : "";
-          streams.push(zephyrStream((f.quality_label || f.quality || L.playZephyr) + mime, f.url, L));
-        });
-      } catch (e) { /* library missing, or QuickJS cannot run the full client */ }
-    }
+    try {
+      zephyrStreams(await playerData(vid, cookieHeader(settings && settings.cookies)), L)
+        .forEach(function (s) { streams.push(s); });
+    } catch (e) { say("player failed " + e); }
+    try {
+      const lib = require("youtubei.js");
+      const Innertube = lib.Innertube || lib;
+      const yt = await Innertube.create({ cookie: cookieHeader(settings && settings.cookies) });
+      const info = await yt.getInfo(vid);
+      const formats = (info && (info.streaming_data || info.streamingData) &&
+        ((info.streaming_data || info.streamingData).adaptive_formats ||
+          (info.streaming_data || info.streamingData).formats)) || [];
+      const have = {};
+      streams.forEach(function (s) { if (s.url) have[s.url] = true; });
+      formats.forEach(function (f) {
+        if (!f.url || have[f.url] || !muxed(f)) return;
+        const mime = f.mime_type ? " " + String(f.mime_type).split(";")[0] : "";
+        streams.push(zephyrStream((f.quality_label || f.quality || L.playZephyr) + mime, f.url, L));
+      });
+    } catch (e) { /* library missing, or QuickJS cannot run the full client */ }
     if (play === "youtube" || play === "both") {
       streams.push({ name: L.youtube, title: L.playYoutube, ytId: vid });
     }
