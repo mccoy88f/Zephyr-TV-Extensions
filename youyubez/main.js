@@ -17,7 +17,11 @@ const TEXT = {
     search: "Cerca", discover: "Scopri", trending: "Tendenze", subs: "Iscrizioni", later: "Guarda dopo", history: "Cronologia",
     play: "Riproduci con", playYoutube: "App YouTube nativa", playZephyr: "Player Zephyr TV", playBoth: "Entrambi",
     playDesc: "App YouTube del TV, il player di Zephyr TV, o entrambi nella lista degli stream.",
-    cookies: "Cookie", cookiesDesc: "Incolla i cookie del tuo browser YouTube (riga Cookie, oppure l'export Netscape o JSON). Zephyr TV li verifica e aggiorna le sezioni. Senza cookie, Scopri e Tendenze sono liste pubbliche, non la tua home.",
+    cookies: "Cookie", cookiesDesc: "Incolla i cookie del tuo browser YouTube (riga Cookie, oppure l'export Netscape o JSON). Servono per Iscrizioni, Guarda dopo e Cronologia. Zephyr TV li verifica e aggiorna le sezioni.",
+    sections: "Sezioni visibili",
+    sectionsDesc: "Liste di video da parole chiave. Scopri e Tendenze ci sono già: puoi cambiarle, toglierle o aggiungerne altre.",
+    sectionName: "Nome",
+    sectionKeys: "Parole chiave",
     disc: "YouYubeZ non è affiliata, sostenuta né collegata a YouTube o a Google. YouTube è un marchio di Google LLC. Usa youtubei.js.",
     youtube: "YouTube", zephyr: "Zephyr TV",
   },
@@ -25,7 +29,11 @@ const TEXT = {
     search: "Search", discover: "Discover", trending: "Trending", subs: "Subscriptions", later: "Watch later", history: "History",
     play: "Play with", playYoutube: "YouTube app", playZephyr: "Zephyr TV player", playBoth: "Both",
     playDesc: "The TV's YouTube app, Zephyr TV's player, or both in the stream list.",
-    cookies: "Cookies", cookiesDesc: "Paste cookies from your YouTube browser session (the Cookie header, or a Netscape or JSON export). Zephyr TV checks them and refreshes the lists. Without cookies, Discover and Trending are public lists, not your home.",
+    cookies: "Cookies", cookiesDesc: "Paste cookies from your YouTube browser session (the Cookie header, or a Netscape or JSON export). Needed for Subscriptions, Watch later and History. Zephyr TV checks them and refreshes the lists.",
+    sections: "Visible sections",
+    sectionsDesc: "Video lists from keywords. Discover and Trending are already there: you can change them, remove them, or add more.",
+    sectionName: "Name",
+    sectionKeys: "Keywords",
     disc: "YouYubeZ is not affiliated with, endorsed by, or connected to YouTube or Google. YouTube is a trademark of Google LLC. Uses youtubei.js.",
     youtube: "YouTube", zephyr: "Zephyr TV",
   },
@@ -33,7 +41,11 @@ const TEXT = {
     search: "Buscar", discover: "Descubrir", trending: "Tendencias", subs: "Suscripciones", later: "Ver más tarde", history: "Historial",
     play: "Reproducir con", playYoutube: "App de YouTube", playZephyr: "Reproductor Zephyr TV", playBoth: "Ambos",
     playDesc: "La app YouTube del televisor, el reproductor de Zephyr TV, o ambos en la lista.",
-    cookies: "Cookies", cookiesDesc: "Pega las cookies de tu sesión de YouTube (la cabecera Cookie, o un export Netscape o JSON). Zephyr TV las comprueba y actualiza las listas. Sin cookies, Descubrir y Tendencias son listas públicas, no tu inicio.",
+    cookies: "Cookies", cookiesDesc: "Pega las cookies de tu sesión de YouTube (la cabecera Cookie, o un export Netscape o JSON). Hacen falta para Suscripciones, Ver más tarde e Historial. Zephyr TV las comprueba y actualiza las listas.",
+    sections: "Secciones visibles",
+    sectionsDesc: "Listas de vídeos a partir de palabras clave. Descubrir y Tendencias ya están: puedes cambiarlas, quitarlas o añadir más.",
+    sectionName: "Nombre",
+    sectionKeys: "Palabras clave",
     disc: "YouYubeZ no está afiliada, respaldada ni conectada con YouTube o Google. YouTube es una marca de Google LLC. Usa youtubei.js.",
     youtube: "YouTube", zephyr: "Zephyr TV",
   },
@@ -41,7 +53,11 @@ const TEXT = {
     search: "Recherche", discover: "Découvrir", trending: "Tendances", subs: "Abonnements", later: "À regarder plus tard", history: "Historique",
     play: "Lire avec", playYoutube: "Application YouTube", playZephyr: "Lecteur Zephyr TV", playBoth: "Les deux",
     playDesc: "L'application YouTube du téléviseur, le lecteur Zephyr TV, ou les deux dans la liste.",
-    cookies: "Cookies", cookiesDesc: "Collez les cookies de votre session YouTube (l'en-tête Cookie, ou un export Netscape ou JSON). Zephyr TV les vérifie et met à jour les listes. Sans cookies, Découvrir et Tendances sont des listes publiques, pas votre accueil.",
+    cookies: "Cookies", cookiesDesc: "Collez les cookies de votre session YouTube (l'en-tête Cookie, ou un export Netscape ou JSON). Ils servent pour Abonnements, À regarder plus tard et Historique. Zephyr TV les vérifie et met à jour les listes.",
+    sections: "Sections visibles",
+    sectionsDesc: "Listes de vidéos à partir de mots-clés. Découvrir et Tendances sont déjà là : vous pouvez les changer, les retirer ou en ajouter.",
+    sectionName: "Nom",
+    sectionKeys: "Mots-clés",
     disc: "YouYubeZ n'est pas affiliée, soutenue ni liée à YouTube ou Google. YouTube est une marque de Google LLC. Utilise youtubei.js.",
     youtube: "YouTube", zephyr: "Zephyr TV",
   },
@@ -707,24 +723,75 @@ async function playerData(vid, cookies) {
   return best;
 }
 
+function asList(v) {
+  if (v == null) return [];
+  if (Array.isArray(v)) return v;
+  const n = v.length;
+  if (typeof n === "number") {
+    const out = [];
+    for (let i = 0; i < n; i++) if (v[i] != null) out.push(v[i]);
+    return out;
+  }
+  return [];
+}
+
+const ACCOUNT_IDS = { subs: true, later: true, history: true, search: true };
+
+function defaultSections() {
+  const L = t();
+  const loc = locale();
+  return [
+    { id: "discover", name: L.discover, keywords: loc.hl === "it" ? "video" : "videos" },
+    { id: "trending", name: L.trending, keywords: loc.hl === "it" ? "tendenze" : "trending" },
+  ];
+}
+
+function sectionList(settings) {
+  const raw = settings && settings.sections;
+  if (raw == null) return defaultSections();
+  return asList(raw).filter(function (s) {
+    return s && (String(s.keywords || "").trim() || String(s.name || "").trim());
+  });
+}
+
+function slugOf(s, i) {
+  const own = s && typeof s.id === "string" ? s.id.trim() : "";
+  if (/^[a-z0-9-]{1,40}$/.test(own) && !ACCOUNT_IDS[own]) return own;
+  let n = String((s && (s.name || s.keywords)) || ("sec" + i)).toLowerCase();
+  n = n.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  if (!n) n = "sec" + i;
+  if (ACCOUNT_IDS[n]) n = "sec-" + n;
+  return n.slice(0, 40);
+}
+
+function visibleSections(settings) {
+  const seen = {};
+  return sectionList(settings).map(function (s, i) {
+    let id = slugOf(s, i);
+    let n = id, k = 2;
+    while (seen[n]) { n = id + "-" + k; k++; }
+    seen[n] = true;
+    return { id: n, name: String(s.name || s.keywords || n).trim(), keywords: String(s.keywords || s.name || "").trim() };
+  }).filter(function (s) { return s.keywords; });
+}
+
 function catalogs(settings) {
   const L = t();
-  const list = [
-    { type: "video", id: "discover", name: L.discover, extra: [{ name: "skip" }] },
-    { type: "video", id: "trending", name: L.trending, extra: [{ name: "skip" }] },
-    { type: "video", id: "search", name: L.search, extra: [{ name: "search", isRequired: true }, { name: "skip" }] },
-  ];
+  const list = visibleSections(settings).map(function (s) {
+    return { type: "video", id: s.id, name: s.name, extra: [{ name: "skip" }] };
+  });
   if (loggedIn(cookieHeader(settings && settings.cookies))) {
-    list.splice(1, 0,
+    list.push(
       { type: "video", id: "subs", name: L.subs, extra: [{ name: "skip" }] },
       { type: "video", id: "later", name: L.later, extra: [{ name: "skip" }] },
       { type: "video", id: "history", name: L.history, extra: [{ name: "skip" }] },
     );
   }
+  list.push({ type: "video", id: "search", name: L.search, extra: [{ name: "search", isRequired: true }, { name: "skip" }] });
   return list;
 }
 
-const BROWSE = { discover: "FEwhat_to_watch", trending: "FEtrending", subs: "FEsubscriptions", later: "VLWL", history: "FEhistory" };
+const BROWSE = { subs: "FEsubscriptions", later: "VLWL", history: "FEhistory" };
 
 function unique(out) {
   const seen = {};
@@ -753,6 +820,14 @@ module.exports = {
         ],
       },
       { type: "text", key: "cookies", label: L.cookies, description: L.cookiesDesc, isPassword: true, placeholder: "VISITOR_INFO1_LIVE=…; SID=…" },
+      {
+        type: "list", key: "sections", label: L.sections, description: L.sectionsDesc, itemLabel: "name",
+        defaultValue: defaultSections(),
+        item: [
+          { type: "text", key: "name", label: L.sectionName, placeholder: L.discover },
+          { type: "text", key: "keywords", label: L.sectionKeys, placeholder: "jazz piano" },
+        ],
+      },
     ];
   },
 
@@ -763,7 +838,8 @@ module.exports = {
   async verify({ settings }) {
     const cookies = cookieHeader(settings && settings.cookies);
     const has = loggedIn(cookies);
-    const ids = has ? ["discover", "subs", "later", "history", "trending"] : ["discover", "trending"];
+    const ids = visibleSections(settings).map(function (s) { return s.id; });
+    if (has) { ids.push("subs"); ids.push("later"); ids.push("history"); }
     const catalogs = {};
     for (let i = 0; i < ids.length; i++) {
       const r = await module.exports.catalog({ id: ids[i], extra: {}, settings: settings || {} });
@@ -786,26 +862,22 @@ module.exports = {
         data = await innertube("search", { context: context(), query: q, params: SEARCH_VIDEOS }, cookies);
         collect(data, out, 0);
       } else if (BROWSE[id]) {
-        if ((id === "subs" || id === "later" || id === "history") && !loggedIn(cookies)) return { metas: [] };
+        if (!loggedIn(cookies)) return { metas: [] };
         data = await innertube("browse", { context: context(), browseId: BROWSE[id] }, cookies);
         collect(data, out, 0);
         if (!out.length) {
           data = await innertube("browse", { context: androidContext(), browseId: BROWSE[id] }, cookies || "", { "User-Agent": ANDROID_UA });
           collect(data, out, 0);
         }
-        // Home and trending: InnerTube browse is often empty (consent or a stale session). Search still lists videos.
-        if (!out.length && (id === "discover" || id === "trending")) {
-          const loc = locale();
-          const q = id === "trending"
-            ? (loc.hl === "it" ? "tendenze" : "trending")
-            : (loc.hl === "it" ? "video" : "videos");
-          data = await innertube("search", { context: context(), query: q, params: SEARCH_VIDEOS }, cookies);
-          collect(data, out, 0);
-        }
+      } else {
+        const sec = visibleSections(settings).filter(function (s) { return s.id === id; })[0];
+        if (!sec) return { metas: [] };
+        data = await innertube("search", { context: context(), query: sec.keywords, params: SEARCH_VIDEOS }, cookies);
+        collect(data, out, 0);
       }
       say("catalog " + id + " n " + out.length);
       let metas = unique(out);
-      if (id === "discover" || id === "trending") metas = metas.filter(function (m) { return !looksLikeAdTitle(m.name); });
+      if (!BROWSE[id] && id !== "search") metas = metas.filter(function (m) { return !looksLikeAdTitle(m.name); });
       return { metas: metas.slice(skip, skip + 100) };
     } catch (e) {
       say("catalog failed " + id + " " + e);
