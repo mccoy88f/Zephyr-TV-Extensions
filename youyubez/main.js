@@ -2,7 +2,7 @@
 // Library: youtubei.js (https://www.npmjs.com/package/youtubei.js), downloaded at install.
 
 const PREFIX = "ytz:";
-const CLIENT_VER = "2.20241001.00.00";
+const CLIENT_VER = "2.20261029.11.00";
 const SEARCH_VIDEOS = "EgIQAQ=="; // InnerTube: videos only (smaller answer, videoRenderer rows)
 const VR_VER = "1.60.19";
 const VR_UA = "com.google.android.apps.youtube.vr.oculus/" + VR_VER + " (Linux; U; Android 12; eureka-user Build/SQ3A.220605.009.A1) gzip";
@@ -335,13 +335,20 @@ function say(msg) {
 }
 
 async function innertube(path, body, cookies, extra, host) {
+  const cn = body && body.context && body.context.client && body.context.client.clientName;
+  const mobile = cn === "ANDROID" || cn === "ANDROID_VR";
   const headers = {
     "Content-Type": "application/json",
     "Accept": "application/json",
   };
-  if (!extra || !extra["User-Agent"]) {
+  if (!mobile) {
     headers.Origin = "https://www.youtube.com";
     headers.Referer = "https://www.youtube.com/";
+    headers["X-YouTube-Client-Name"] = "1";
+    headers["X-YouTube-Client-Version"] = CLIENT_VER;
+  }
+  if (!extra || !extra["User-Agent"]) {
+    headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
   }
   if (extra) {
     const keys = Object.keys(extra);
@@ -354,6 +361,13 @@ async function innertube(path, body, cookies, extra, host) {
       headers.Authorization = "SAPISIDHASH " + auth;
       headers["X-Origin"] = "https://www.youtube.com";
     }
+  }
+  if (cn === "ANDROID") {
+    headers["X-YouTube-Client-Name"] = "3";
+    headers["X-YouTube-Client-Version"] = ANDROID_VER;
+  } else if (cn === "ANDROID_VR") {
+    headers["X-YouTube-Client-Name"] = "28";
+    headers["X-YouTube-Client-Version"] = VR_VER;
   }
   const res = await fetch("https://" + (host || "www.youtube.com") + "/youtubei/v1/" + path + "?prettyPrint=false", {
     method: "POST",
@@ -416,6 +430,24 @@ function playerContext() {
 
 function playerHeaders() {
   return { "User-Agent": VR_UA };
+}
+
+function androidPlayerContext() {
+  const loc = locale();
+  return {
+    client: {
+      clientName: "ANDROID",
+      clientVersion: ANDROID_VER,
+      androidSdkVersion: 33,
+      userAgent: ANDROID_UA,
+      hl: loc.hl,
+      gl: loc.gl,
+    },
+  };
+}
+
+function androidPlayerHeaders() {
+  return { "User-Agent": ANDROID_UA };
 }
 
 function playHeaders() {
@@ -563,19 +595,25 @@ async function fromWatchPage(vid, cookies) {
 function dummyL() { return { zephyr: "x", playZephyr: "x" }; }
 
 async function playerData(vid, cookies) {
-  const body = { context: playerContext(), videoId: vid, contentCheckOk: true, racyCheckOk: true };
+  const clients = [
+    { context: playerContext(), extra: playerHeaders(), label: "vr" },
+    { context: androidPlayerContext(), extra: androidPlayerHeaders(), label: "android" },
+  ];
   const hosts = ["www.youtube.com", "youtubei.googleapis.com"];
   const tries = ["", cookies || ""];
   let best = {};
-  for (let h = 0; h < hosts.length; h++) {
-    for (let i = 0; i < tries.length; i++) {
-      if (i && !tries[i]) continue;
-      const data = await innertube("player", body, tries[i], playerHeaders(), hosts[h]);
-      const n = zephyrStreams(data, dummyL()).length;
-      const st = (data.playabilityStatus && data.playabilityStatus.status) || "?";
-      say("player " + hosts[h] + " " + st + " urls " + n);
-      if (n) return data;
-      if (data && data.videoDetails && !best.videoDetails) best = data;
+  for (let c = 0; c < clients.length; c++) {
+    const body = { context: clients[c].context, videoId: vid, contentCheckOk: true, racyCheckOk: true };
+    for (let h = 0; h < hosts.length; h++) {
+      for (let i = 0; i < tries.length; i++) {
+        if (i && !tries[i]) continue;
+        const data = await innertube("player", body, tries[i], clients[c].extra, hosts[h]);
+        const n = zephyrStreams(data, dummyL()).length;
+        const st = (data.playabilityStatus && data.playabilityStatus.status) || "?";
+        say("player " + clients[c].label + " " + hosts[h] + " " + st + " urls " + n);
+        if (n) return data;
+        if (data && data.videoDetails && !best.videoDetails) best = data;
+      }
     }
   }
   const page = await fromWatchPage(vid, cookies);
@@ -652,6 +690,15 @@ module.exports = {
         collect(data, out, 0);
         if (!out.length) {
           data = await innertube("browse", { context: androidContext(), browseId: BROWSE[id] }, cookies || "", { "User-Agent": ANDROID_UA });
+          collect(data, out, 0);
+        }
+        // Home and trending: InnerTube browse is often empty (consent or a stale session). Search still lists videos.
+        if (!out.length && (id === "discover" || id === "trending")) {
+          const lang = (typeof zephyr !== "undefined" && zephyr.language) || "en";
+          const q = id === "trending"
+            ? (lang === "it" ? "tendenze" : "trending")
+            : (lang === "it" ? "musica" : "music");
+          data = await innertube("search", { context: context(), query: q, params: SEARCH_VIDEOS }, cookies);
           collect(data, out, 0);
         }
       }
