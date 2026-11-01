@@ -1,15 +1,16 @@
 // YouYubeZ — Zephyr TV extension. Not affiliated with YouTube or Google.
 // Library: youtubei.js (https://www.npmjs.com/package/youtubei.js), downloaded at install.
 
-const KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
 const PREFIX = "ytz:";
+const CLIENT_VER = "2.20241001.00.00";
+const SEARCH_VIDEOS = "EgIQAQ=="; // InnerTube: videos only (smaller answer, videoRenderer rows)
 
 const TEXT = {
   it: {
     search: "Cerca", discover: "Scopri", subs: "Iscrizioni", later: "Guarda dopo", history: "Cronologia",
     play: "Riproduci con", playYoutube: "App YouTube nativa", playZephyr: "Player Zephyr TV", playBoth: "Entrambi",
     playDesc: "App YouTube del TV, il player di Zephyr TV, o entrambi nella lista degli stream.",
-    cookies: "Cookie", cookiesDesc: "Incolla i cookie del tuo browser YouTube. Servono per Iscrizioni, Guarda dopo e Cronologia. È l'accesso al tuo account.",
+    cookies: "Cookie", cookiesDesc: "Incolla i cookie del tuo browser YouTube (riga Cookie, oppure l'export Netscape o JSON). Servono per Iscrizioni, Guarda dopo e Cronologia. È l'accesso al tuo account.",
     disc: "YouYubeZ non è affiliata, sostenuta né collegata a YouTube o a Google. YouTube è un marchio di Google LLC. Usa youtubei.js.",
     youtube: "YouTube", zephyr: "Zephyr TV",
   },
@@ -17,7 +18,7 @@ const TEXT = {
     search: "Search", discover: "Discover", subs: "Subscriptions", later: "Watch later", history: "History",
     play: "Play with", playYoutube: "YouTube app", playZephyr: "Zephyr TV player", playBoth: "Both",
     playDesc: "The TV's YouTube app, Zephyr TV's player, or both in the stream list.",
-    cookies: "Cookies", cookiesDesc: "Paste cookies from your YouTube browser session. Needed for Subscriptions, Watch later and History. This is access to your account.",
+    cookies: "Cookies", cookiesDesc: "Paste cookies from your YouTube browser session (the Cookie header, or a Netscape or JSON export). Needed for Subscriptions, Watch later and History. This is access to your account.",
     disc: "YouYubeZ is not affiliated with, endorsed by, or connected to YouTube or Google. YouTube is a trademark of Google LLC. Uses youtubei.js.",
     youtube: "YouTube", zephyr: "Zephyr TV",
   },
@@ -25,7 +26,7 @@ const TEXT = {
     search: "Buscar", discover: "Descubrir", subs: "Suscripciones", later: "Ver más tarde", history: "Historial",
     play: "Reproducir con", playYoutube: "App de YouTube", playZephyr: "Reproductor Zephyr TV", playBoth: "Ambos",
     playDesc: "La app YouTube del televisor, el reproductor de Zephyr TV, o ambos en la lista.",
-    cookies: "Cookies", cookiesDesc: "Pega las cookies de tu sesión de YouTube en el navegador. Hacen falta para Suscripciones, Ver más tarde e Historial. Es el acceso a tu cuenta.",
+    cookies: "Cookies", cookiesDesc: "Pega las cookies de tu sesión de YouTube (la cabecera Cookie, o un export Netscape o JSON). Hacen falta para Suscripciones, Ver más tarde e Historial. Es el acceso a tu cuenta.",
     disc: "YouYubeZ no está afiliada, respaldada ni conectada con YouTube o Google. YouTube es una marca de Google LLC. Usa youtubei.js.",
     youtube: "YouTube", zephyr: "Zephyr TV",
   },
@@ -33,7 +34,7 @@ const TEXT = {
     search: "Recherche", discover: "Découvrir", subs: "Abonnements", later: "À regarder plus tard", history: "Historique",
     play: "Lire avec", playYoutube: "Application YouTube", playZephyr: "Lecteur Zephyr TV", playBoth: "Les deux",
     playDesc: "L'application YouTube du téléviseur, le lecteur Zephyr TV, ou les deux dans la liste.",
-    cookies: "Cookies", cookiesDesc: "Collez les cookies de votre session YouTube dans le navigateur. Ils servent pour Abonnements, À regarder plus tard et Historique. C'est l'accès à votre compte.",
+    cookies: "Cookies", cookiesDesc: "Collez les cookies de votre session YouTube (l'en-tête Cookie, ou un export Netscape ou JSON). Ils servent pour Abonnements, À regarder plus tard et Historique. C'est l'accès à votre compte.",
     disc: "YouYubeZ n'est pas affiliée, soutenue ni liée à YouTube ou Google. YouTube est une marque de Google LLC. Utilise youtubei.js.",
     youtube: "YouTube", zephyr: "Zephyr TV",
   },
@@ -47,58 +48,134 @@ function videoId(id) {
   return String(id || "").replace(/^ytz:/, "");
 }
 
+function textOf(v) {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  if (typeof v.simpleText === "string") return v.simpleText;
+  if (v.runs) return v.runs.map(function (r) { return r.text || ""; }).join("");
+  if (typeof v.content === "string") return v.content;
+  return "";
+}
+
+function posterOf(id, thumbs) {
+  if (thumbs && thumbs.length) {
+    const t = thumbs.slice().sort(function (a, b) { return (b.width || 0) - (a.width || 0); })[0];
+    if (t && t.url) return t.url;
+  }
+  return "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg";
+}
+
 function metaOf(v) {
-  if (!v || !v.videoId) return null;
-  const title = (v.title && (v.title.simpleText || (v.title.runs || []).map(function (r) { return r.text; }).join(""))) || v.videoId;
-  const thumbs = ((v.thumbnail && v.thumbnail.thumbnails) || []).slice().sort(function (a, b) { return (b.width || 0) - (a.width || 0); });
+  if (!v) return null;
+  const id = v.videoId || v.video_id || (v.navigationEndpoint && v.navigationEndpoint.watchEndpoint && v.navigationEndpoint.watchEndpoint.videoId);
+  if (!id || !/^[a-zA-Z0-9_-]{11}$/.test(id)) return null;
   return {
-    id: PREFIX + v.videoId,
+    id: PREFIX + id,
     type: "video",
-    name: title,
-    poster: thumbs[0] && thumbs[0].url,
+    name: textOf(v.title) || id,
+    poster: posterOf(id, v.thumbnail && v.thumbnail.thumbnails),
     posterShape: "landscape",
-    description: v.descriptionSnippet && (v.descriptionSnippet.simpleText || (v.descriptionSnippet.runs || []).map(function (r) { return r.text; }).join("")),
+    description: textOf(v.descriptionSnippet || v.description),
   };
 }
 
-function walk(node, out) {
-  if (!node) return;
-  if (Array.isArray(node)) { node.forEach(function (n) { walk(n, out); }); return; }
+const RENDERERS = ["videoRenderer", "gridVideoRenderer", "playlistVideoRenderer", "compactVideoRenderer", "videoWithContextRenderer"];
+
+function collect(node, out, depth) {
+  if (!node || out.length >= 150 || depth > 28) return;
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length && out.length < 150; i++) collect(node[i], out, depth + 1);
+    return;
+  }
   if (typeof node !== "object") return;
-  if (node.videoRenderer) { const m = metaOf(node.videoRenderer); if (m) out.push(m); }
-  if (node.gridVideoRenderer) { const m = metaOf(node.gridVideoRenderer); if (m) out.push(m); }
-  if (node.playlistVideoRenderer) { const m = metaOf(node.playlistVideoRenderer); if (m) out.push(m); }
-  if (node.compactVideoRenderer) { const m = metaOf(node.compactVideoRenderer); if (m) out.push(m); }
-  Object.keys(node).forEach(function (k) { if (k !== "playbackTracking") walk(node[k], out); });
+  for (let r = 0; r < RENDERERS.length; r++) {
+    if (node[RENDERERS[r]]) {
+      const m = metaOf(node[RENDERERS[r]]);
+      if (m) out.push(m);
+      return;
+    }
+  }
+  const lock = node.lockupViewModel;
+  if (lock && typeof lock.contentId === "string" && /^[a-zA-Z0-9_-]{11}$/.test(lock.contentId)) {
+    const id = lock.contentId;
+    let title = "";
+    try { title = lock.metadata.lockupMetadataViewModel.title.content; } catch (e) { /* no title in this lockup */ }
+    out.push({ id: PREFIX + id, type: "video", name: title || id, poster: posterOf(id), posterShape: "landscape" });
+    return;
+  }
+  const keys = Object.keys(node);
+  for (let i = 0; i < keys.length && out.length < 150; i++) {
+    const k = keys[i];
+    if (k === "playbackTracking" || k === "responseContext" || k === "frameworkUpdates" || k === "topbar" || k === "header") continue;
+    collect(node[k], out, depth + 1);
+  }
+}
+
+/** Cookie header from a paste: Cookie string, Netscape file, or a JSON export (Cookie-Editor, EditThisCookie). */
+function cookieHeader(raw) {
+  if (raw == null) return "";
+  let s = String(raw).trim();
+  if (!s) return "";
+  if (s.charAt(0) === "[" || s.charAt(0) === "{") {
+    try {
+      const j = JSON.parse(s);
+      const list = Array.isArray(j) ? j : (Array.isArray(j.cookies) ? j.cookies : null);
+      if (list) {
+        return list.filter(function (c) { return c && c.name && c.value != null; })
+          .map(function (c) { return c.name + "=" + c.value; }).join("; ");
+      }
+    } catch (e) { /* not JSON */ }
+  }
+  if (s.indexOf("\t") >= 0 && s.indexOf("\n") >= 0 && (/youtube\.com/i.test(s) || /Netscape/i.test(s))) {
+    return s.split(/\r?\n/).map(function (line) {
+      if (!line || line.charAt(0) === "#") return "";
+      const p = line.split("\t");
+      if (p.length >= 7) return p[5] + "=" + p[6];
+      return "";
+    }).filter(Boolean).join("; ");
+  }
+  if (s.indexOf("\n") >= 0 && s.indexOf("=") >= 0 && s.indexOf(";") < 0) {
+    return s.split(/\r?\n/).map(function (line) { return line.trim(); }).filter(function (line) {
+      return line && line.charAt(0) !== "#" && line.indexOf("=") > 0;
+    }).join("; ");
+  }
+  return s.replace(/\r?\n+/g, "; ").replace(/;\s*;+/g, "; ").trim();
+}
+
+function loggedIn(cookies) {
+  return /(?:^|;\s*)(?:SID|SAPISID|__Secure-1PSID|__Secure-3PSID|LOGIN_INFO)=/.test(cookies);
 }
 
 async function innertube(path, body, cookies) {
   const headers = {
     "Content-Type": "application/json",
+    "Accept": "application/json",
+    "Origin": "https://www.youtube.com",
+    "Referer": "https://www.youtube.com/",
     "X-YouTube-Client-Name": "1",
-    "X-YouTube-Client-Version": "2.20241001.00.00",
+    "X-YouTube-Client-Version": CLIENT_VER,
   };
   if (cookies) headers.Cookie = cookies;
-  const res = await fetch("https://www.youtube.com/youtubei/v1/" + path + "?prettyPrint=false&key=" + KEY, {
+  const res = await fetch("https://www.youtube.com/youtubei/v1/" + path + "?prettyPrint=false", {
     method: "POST",
     headers: headers,
     body: JSON.stringify(body),
   });
+  const text = await res.text();
   if (!res.ok) return {};
-  return res.json();
+  try { return JSON.parse(text); } catch (e) { return {}; }
 }
 
-function context(cookies) {
+function context() {
   const lang = (typeof zephyr !== "undefined" && zephyr.language) || "en";
   const region = (typeof zephyr !== "undefined" && zephyr.region) || "US";
   return {
     client: {
       clientName: "WEB",
-      clientVersion: "2.20241001.00.00",
+      clientVersion: CLIENT_VER,
       hl: lang,
       gl: region || "US",
     },
-    user: cookies ? { lockedSafetyMode: false } : undefined,
   };
 }
 
@@ -107,7 +184,7 @@ function catalogs(settings) {
   const list = [
     { type: "video", id: "search", name: L.search, extra: [{ name: "search", isRequired: true }, { name: "skip" }] },
   ];
-  if (settings && settings.cookies) {
+  if (loggedIn(cookieHeader(settings && settings.cookies))) {
     list.unshift(
       { type: "video", id: "discover", name: L.discover, extra: [{ name: "skip" }] },
       { type: "video", id: "subs", name: L.subs, extra: [{ name: "skip" }] },
@@ -119,6 +196,15 @@ function catalogs(settings) {
 }
 
 const BROWSE = { discover: "FEwhat_to_watch", subs: "FEsubscriptions", later: "VLWL", history: "FEhistory" };
+
+function unique(out) {
+  const seen = {};
+  return out.filter(function (m) {
+    if (seen[m.id]) return false;
+    seen[m.id] = true;
+    return true;
+  });
+}
 
 module.exports = {
   async settings() {
@@ -142,32 +228,40 @@ module.exports = {
   },
 
   async catalog({ id, extra, settings }) {
-    const cookies = settings && settings.cookies;
-    const skip = (extra && extra.skip) || 0;
-    const out = [];
-    let data = {};
-    if (id === "search") {
-      const q = extra && extra.search;
-      if (!q) return { metas: [] };
-      data = await innertube("search", { context: context(cookies), query: q }, cookies);
-    } else if (BROWSE[id]) {
-      if (!cookies) return { metas: [] };
-      data = await innertube("browse", { context: context(cookies), browseId: BROWSE[id] }, cookies);
+    try {
+      const cookies = cookieHeader(settings && settings.cookies);
+      const skip = (extra && extra.skip) || 0;
+      const out = [];
+      let data = {};
+      if (id === "search") {
+        const q = extra && extra.search;
+        if (!q) return { metas: [] };
+        data = await innertube("search", { context: context(), query: q, params: SEARCH_VIDEOS }, cookies);
+      } else if (BROWSE[id]) {
+        if (!loggedIn(cookies)) return { metas: [] };
+        data = await innertube("browse", { context: context(), browseId: BROWSE[id] }, cookies);
+      }
+      collect(data, out, 0);
+      return { metas: unique(out).slice(skip, skip + 100) };
+    } catch (e) {
+      return { metas: [] };
     }
-    walk(data, out);
-    const seen = {};
-    const metas = out.filter(function (m) {
-      if (seen[m.id]) return false;
-      seen[m.id] = true;
-      return true;
-    });
-    return { metas: metas.slice(skip, skip + 100) };
   },
 
   async meta({ id }) {
     const vid = videoId(id);
     if (!vid) return { meta: null };
-    return { meta: { id: PREFIX + vid, type: "video", name: vid, posterShape: "landscape" } };
+    const base = { id: PREFIX + vid, type: "video", name: vid, poster: posterOf(vid), posterShape: "landscape" };
+    try {
+      const res = await fetch("https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + vid));
+      const j = await res.json();
+      if (j && j.title) {
+        base.name = j.title;
+        if (j.thumbnail_url) base.poster = j.thumbnail_url;
+        if (j.author_name) base.description = j.author_name;
+      }
+    } catch (e) { /* keep the id as the name */ }
+    return { meta: base };
   },
 
   async stream({ id, settings }) {
@@ -183,7 +277,7 @@ module.exports = {
       try {
         const lib = require("youtubei.js");
         const Innertube = lib.Innertube || lib;
-        const yt = await Innertube.create({ cookie: settings && settings.cookies });
+        const yt = await Innertube.create({ cookie: cookieHeader(settings && settings.cookies) });
         const info = await yt.getInfo(vid);
         const formats = (info && (info.streaming_data || info.streamingData) &&
           ((info.streaming_data || info.streamingData).adaptive_formats ||
