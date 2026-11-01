@@ -656,33 +656,51 @@ async function fromWatchPage(vid, cookies) {
 
 function dummyL() { return { zephyr: "x", playZephyr: "x" }; }
 
+function visitorOf(data) {
+  return (data && data.responseContext && data.responseContext.visitorData) || "";
+}
+
+function withVisitor(ctx, visitor) {
+  if (!visitor) return ctx;
+  const client = {};
+  const src = (ctx && ctx.client) || {};
+  const keys = Object.keys(src);
+  for (let i = 0; i < keys.length; i++) client[keys[i]] = src[keys[i]];
+  client.visitorData = visitor;
+  return { client: client };
+}
+
 async function playerData(vid, cookies) {
+  // Account cookies on ANDROID / VISIONOS / VR make InnerTube answer LOGIN_REQUIRED and no URLs.
+  void cookies;
+  let visitor = "";
+  try { visitor = (typeof localStorage !== "undefined" && localStorage.getItem("ytVisitor")) || ""; } catch (e) { /* no store */ }
   const clients = [
     { context: visionContext(), extra: visionHeaders(), label: "vision" },
     { context: playerContext(), extra: playerHeaders(), label: "vr" },
     { context: androidPlayerContext(), extra: androidPlayerHeaders(), label: "android" },
   ];
   const hosts = ["www.youtube.com", "youtubei.googleapis.com"];
-  const tries = ["", cookies || ""];
   let best = {};
   for (let c = 0; c < clients.length; c++) {
-    const body = { context: clients[c].context, videoId: vid, contentCheckOk: true, racyCheckOk: true };
+    const body = { context: withVisitor(clients[c].context, visitor), videoId: vid, contentCheckOk: true, racyCheckOk: true };
     for (let h = 0; h < hosts.length; h++) {
-      for (let i = 0; i < tries.length; i++) {
-        if (i && !tries[i]) continue;
-        const data = await innertube("player", body, tries[i], clients[c].extra, hosts[h]);
-        const n = zephyrStreams(data, dummyL()).length;
-        const st = (data.playabilityStatus && data.playabilityStatus.status) || "?";
-        say("player " + clients[c].label + " " + hosts[h] + " " + st + " urls " + n);
-        if (n) {
-          data._playUa = clients[c].extra["User-Agent"];
-          return data;
-        }
-        if (data && data.videoDetails && !best.videoDetails) best = data;
+      const data = await innertube("player", body, "", clients[c].extra, hosts[h]);
+      if (!visitor) {
+        visitor = visitorOf(data);
+        try { if (visitor && typeof localStorage !== "undefined") localStorage.setItem("ytVisitor", visitor); } catch (e) { /* no store */ }
       }
+      const n = zephyrStreams(data, dummyL()).length;
+      const ps = (data.playabilityStatus) || {};
+      say("player " + vid + " " + clients[c].label + " " + hosts[h] + " " + (ps.status || "?") + " " + (ps.reason || "") + " urls " + n);
+      if (n) {
+        data._playUa = clients[c].extra["User-Agent"];
+        return data;
+      }
+      if (data && data.videoDetails && !best.videoDetails) best = data;
     }
   }
-  const page = await fromWatchPage(vid, cookies);
+  const page = await fromWatchPage(vid, "");
   const n = zephyrStreams(page, dummyL()).length;
   say("watch page urls " + n);
   if (n) return page;
