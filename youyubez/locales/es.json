@@ -3,6 +3,7 @@
   "description": "Busca y reproduce YouTube en Zephyr TV. No está afiliada, respaldada ni conectada con YouTube o Google. YouTube es una marca de Google LLC. Usa youtubei.js (https://www.npmjs.com/package/youtubei.js), descargada al instalar.",
   "settings": {
     "play": { "label": "Reproducir con", "description": "La app YouTube del televisor, el reproductor de Zephyr TV, o ambos en la lista." },
-    "cookies": { "label": "Cookies", "description": "Pega las cookies de tu sesión de YouTube en el navegador. Hacen falta para Suscripciones, Ver más tarde e Historial. Es el acceso a tu cuenta." }
+    "cookies": { "label": "Cookies", "description": "Pega las cookies de tu sesión de YouTube (la cabecera Cookie, o un export Netscape o JSON). Hacen falta para Suscripciones, Ver más tarde e Historial. Zephyr TV las comprueba y actualiza las listas." },
+    "sections": { "label": "Secciones visibles", "description": "Listas de vídeos a partir de palabras clave. Descubrir y Tendencias ya están: puedes cambiarlas, quitarlas o añadir más." }
   }
 }

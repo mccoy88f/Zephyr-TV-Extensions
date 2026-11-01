@@ -3,6 +3,7 @@
   "description": "Search and play YouTube in Zephyr TV. Not affiliated with, endorsed by, or connected to YouTube or Google. YouTube is a trademark of Google LLC. Uses youtubei.js (https://www.npmjs.com/package/youtubei.js), downloaded at install.",
   "settings": {
     "play": { "label": "Play with", "description": "The TV's YouTube app, Zephyr TV's player, or both in the stream list." },
-    "cookies": { "label": "Cookies", "description": "Paste cookies from your YouTube browser session, yours only. Needed for Subscriptions, Watch later and History. This is access to your account." }
+    "cookies": { "label": "Cookies", "description": "Paste cookies from your YouTube browser session (the Cookie header, or a Netscape or JSON export). Needed for Subscriptions, Watch later and History. Zephyr TV checks them and refreshes the lists." },
+    "sections": { "label": "Visible sections", "description": "Video lists from keywords. Discover and Trending are already there: you can change them, remove them, or add more." }
   }
 }
